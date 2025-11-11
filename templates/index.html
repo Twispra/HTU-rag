@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>河南师范大学智能问答系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Microsoft YaHei', sans-serif;
+        }
+        .container {
+            max-width: 800px;
+            margin-top: 2rem;
+        }
+        .card {
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+        .card-header {
+            background-color: #1e50a2;
+            color: white;
+            border-radius: 15px 15px 0 0 !important;
+            font-weight: bold;
+        }
+        .btn-primary {
+            background-color: #1e50a2;
+            border: none;
+        }
+        .btn-primary:hover {
+            background-color: #16438c;
+        }
+        #loading {
+            display: none;
+            margin: 1rem 0;
+        }
+        .result-card {
+            margin-bottom: 1rem;
+            border-left: 4px solid #1e50a2;
+        }
+        .source-link {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="card-header text-center py-3">
+                <h4>河南师范大学智能问答系统</h4>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="questionInput" class="form-label">请输入您的问题：</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="questionInput" placeholder="例如：学校运动会是什么时候？">
+                        <button class="btn btn-primary" type="button" id="askBtn">提问</button>
+                    </div>
+                </div>
+                
+                <div id="loading" class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">加载中...</span>
+                    </div>
+                    <p class="mt-2">正在思考中，请稍候...</p>
+                </div>
+                
+                <div id="resultArea"></div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                参考资料
+            </div>
+            <div class="card-body" id="references">
+                <p class="text-muted">问题回答后，相关参考资料将显示在这里</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const questionInput = document.getElementById('questionInput');
+            const askBtn = document.getElementById('askBtn');
+            const loading = document.getElementById('loading');
+            const resultArea = document.getElementById('resultArea');
+            const references = document.getElementById('references');
+            
+            // 按回车键也可以提交问题
+            questionInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    askQuestion();
+                }
+            });
+            
+            askBtn.addEventListener('click', askQuestion);
+            
+            function askQuestion() {
+                const question = questionInput.value.trim();
+                if (!question) return;
+                
+                // 显示加载动画
+                loading.style.display = 'block';
+                resultArea.innerHTML = '';
+                references.innerHTML = '<p class="text-muted">正在查找相关信息...</p>';
+                
+                // 发送请求到后端API
+                fetch(`/chat?q=${encodeURIComponent(question)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        // 显示回答
+                        resultArea.innerHTML = `
+                            <div class="card result-card">
+                                <div class="card-body">
+                                    <h5 class="card-title">回答：</h5>
+                                    <p class="card-text">${data.answer.replace(/\n/g, '<br>')}</p>
+                                </div>
+                            </div>
+                        `;
+                        
+                        // 显示参考资料
+                        if (data.references && data.references.length > 0) {
+                            let refsHtml = '<h6>参考资料：</h6><div class="list-group">';
+                            data.references.forEach(ref => {
+                                refsHtml += `
+                                    <div class="list-group-item">
+                                        <h6 class="mb-1">${ref.title}</h6>
+                                        ${ref.source_url ? `<a href="${ref.source_url}" target="_blank" class="source-link">${ref.source_url}</a>` : ''}
+                                    </div>
+                                `;
+                            });
+                            refsHtml += '</div>';
+                            references.innerHTML = refsHtml;
+                        } else {
+                            references.innerHTML = '<p class="text-muted">没有找到相关参考资料</p>';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        resultArea.innerHTML = `
+                            <div class="alert alert-danger" role="alert">
+                                发生错误: ${error.message}
+                            </div>
+                        `;
+                    })
+                    .finally(() => {
+                        loading.style.display = 'none';
+                    });
+            }
+            
+            // 如果URL中有q参数，自动加载问题
+            const urlParams = new URLSearchParams(window.location.search);
+            const question = urlParams.get('q');
+            if (question) {
+                questionInput.value = question;
+                // 等待页面完全加载后再触发问题
+                setTimeout(() => askQuestion(), 500);
+            }
+        });
+    </script>
+</body>
+</html>
