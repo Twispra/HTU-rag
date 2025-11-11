@@ -1,1 +1,4 @@
 dataset
+.idea
+__pycache__
+.gitignore
