@@ -40,7 +40,7 @@ app = FastAPI(
 )
 
 # 挂载静态文件目录
-app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+app.mount("../static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
@@ -90,6 +90,8 @@ def build_prompt(query: str, docs: List[dict]) -> List[dict]:
         {"role": "system", "content": "你是河南师范大学教务处智能助手。"},
         {"role": "user", "content": user}
     ]
+
+
 
 @app.get("/ask", response_class=JSONResponse)
 async def ask(q: str = Query(..., description="纯检索预览")):  # 添加 async 关键字
