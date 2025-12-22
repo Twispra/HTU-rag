@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # 索引
-    index_dir: str = "../dataset/index"
+    index_dir: str = "dataset/index"
     topk_faiss: int = 24
     topk_final: int = 8
 
