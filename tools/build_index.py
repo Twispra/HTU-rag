@@ -3,6 +3,7 @@ import os
 from sentence_transformers import SentenceTransformer
 import numpy as np, faiss, json, pathlib, tqdm
 
+
 CHUNK_DIR = "../dataset/chunks"
 INDEX_DIR = "../dataset/index"
 os.makedirs(INDEX_DIR, exist_ok=True)
