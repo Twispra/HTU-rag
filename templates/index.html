@@ -3,164 +3,881 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>河南师范大学智能问答系统</title>
+    <title>HTU智能问答助手 - 河南师范大学</title>
+
+    <!-- CSS依赖 -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <!-- Marked.js for Markdown渲染 -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Highlight.js for 代码高亮 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github.min.css">
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+
     <style>
+        :root {
+            --primary-color: #1e50a2;
+            --primary-dark: #16438c;
+            --primary-light: #3a6fc4;
+            --secondary-color: #5e72e4;
+            --success-color: #2dce89;
+            --info-color: #11cdef;
+            --warning-color: #fb6340;
+            --danger-color: #f5365c;
+            --light-bg: #f7fafc;
+            --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --card-shadow-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
         body {
-            background-color: #f8f9fa;
-            font-family: 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            padding: 2rem 0;
         }
-        .container {
-            max-width: 800px;
-            margin-top: 2rem;
+
+        .main-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 0 1rem;
         }
-        .card {
-            border-radius: 15px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+
+        /* 顶部标题卡片 */
+        .header-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: var(--card-shadow);
+            padding: 2rem;
             margin-bottom: 2rem;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
         }
-        .card-header {
-            background-color: #1e50a2;
+
+        .header-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color), var(--info-color));
+        }
+
+        .header-card h1 {
+            color: var(--primary-color);
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            font-size: 2rem;
+        }
+
+        .header-card .subtitle {
+            color: #6c757d;
+            font-size: 1rem;
+        }
+
+        /* 聊天容器 */
+        .chat-container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: var(--card-shadow);
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            min-height: 500px;
+            max-height: 600px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .chat-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+
+        .chat-container::-webkit-scrollbar-thumb {
+            background: var(--primary-color);
+            border-radius: 10px;
+        }
+
+        .chat-container::-webkit-scrollbar-thumb:hover {
+            background: var(--primary-dark);
+        }
+
+        /* 消息气泡 */
+        .message {
+            margin-bottom: 1.5rem;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message-user {
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .message-assistant {
+            display: flex;
+            justify-content: flex-start;
+        }
+
+        .message-content {
+            max-width: 80%;
+            padding: 1rem 1.25rem;
+            border-radius: 18px;
+            position: relative;
+            word-wrap: break-word;
+        }
+
+        .message-user .message-content {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
             color: white;
-            border-radius: 15px 15px 0 0 !important;
-            font-weight: bold;
+            border-bottom-right-radius: 4px;
         }
-        .btn-primary {
-            background-color: #1e50a2;
-            border: none;
+
+        .message-assistant .message-content {
+            background: var(--light-bg);
+            color: #2d3748;
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
         }
-        .btn-primary:hover {
-            background-color: #16438c;
+
+        .message-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            margin: 0 0.75rem;
+            flex-shrink: 0;
         }
-        #loading {
-            display: none;
+
+        .message-user .message-avatar {
+            background: linear-gradient(135deg, var(--secondary-color), var(--info-color));
+            color: white;
+        }
+
+        .message-assistant .message-avatar {
+            background: linear-gradient(135deg, var(--success-color), var(--info-color));
+            color: white;
+        }
+
+        /* Markdown样式 */
+        .markdown-content {
+            line-height: 1.8;
+        }
+
+        .markdown-content h1,
+        .markdown-content h2,
+        .markdown-content h3 {
+            margin-top: 1.5rem;
+            margin-bottom: 1rem;
+            font-weight: 600;
+        }
+
+        .markdown-content h1 {
+            font-size: 1.75rem;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 0.5rem;
+        }
+
+        .markdown-content h2 {
+            font-size: 1.5rem;
+        }
+
+        .markdown-content h3 {
+            font-size: 1.25rem;
+        }
+
+        .markdown-content p {
+            margin-bottom: 1rem;
+        }
+
+        .markdown-content ul,
+        .markdown-content ol {
+            margin-bottom: 1rem;
+            padding-left: 2rem;
+        }
+
+        .markdown-content li {
+            margin-bottom: 0.5rem;
+        }
+
+        .markdown-content strong {
+            color: var(--primary-color);
+            font-weight: 600;
+        }
+
+        .markdown-content code {
+            background: #f1f5f9;
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.9em;
+            color: #e53e3e;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+
+        .markdown-content pre {
+            background: #1e293b;
+            border-radius: 8px;
+            padding: 1rem;
+            overflow-x: auto;
             margin: 1rem 0;
         }
-        .result-card {
-            margin-bottom: 1rem;
-            border-left: 4px solid #1e50a2;
+
+        .markdown-content pre code {
+            background: none;
+            color: #e2e8f0;
+            padding: 0;
         }
-        .source-link {
-            color: #6c757d;
+
+        .markdown-content blockquote {
+            border-left: 4px solid var(--primary-color);
+            padding-left: 1rem;
+            margin: 1rem 0;
+            color: #64748b;
+            font-style: italic;
+        }
+
+        .markdown-content a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .markdown-content a:hover {
+            text-decoration: underline;
+        }
+
+        .markdown-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+
+        .markdown-content table th,
+        .markdown-content table td {
+            border: 1px solid #e2e8f0;
+            padding: 0.5rem;
+            text-align: left;
+        }
+
+        .markdown-content table th {
+            background: var(--light-bg);
+            font-weight: 600;
+        }
+
+        /* 输入区域 */
+        .input-container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: var(--card-shadow);
+            padding: 1.5rem;
+            position: sticky;
+            bottom: 1rem;
+        }
+
+        .input-wrapper {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+        }
+
+        .input-field {
+            flex: 1;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 0.75rem 1.25rem;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(30, 80, 162, 0.1);
+        }
+
+        .send-btn {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 0.75rem 2rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .send-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--card-shadow-hover);
+        }
+
+        .send-btn:active {
+            transform: translateY(0);
+        }
+
+        .send-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* 加载动画 */
+        .loading-message {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 1rem;
+            color: #64748b;
+        }
+
+        .typing-indicator {
+            display: flex;
+            gap: 4px;
+        }
+
+        .typing-indicator span {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--primary-color);
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-indicator span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-indicator span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes typing {
+            0%, 60%, 100% {
+                transform: translateY(0);
+                opacity: 0.7;
+            }
+            30% {
+                transform: translateY(-10px);
+                opacity: 1;
+            }
+        }
+
+        /* 参考资料 */
+        .references-container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: var(--card-shadow);
+            padding: 1.5rem;
+            margin-top: 1rem;
+        }
+
+        .references-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .reference-item {
+            background: var(--light-bg);
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            transition: all 0.3s ease;
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .reference-item:hover {
+            transform: translateX(5px);
+            box-shadow: var(--card-shadow);
+        }
+
+        .reference-title {
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 0.5rem;
+        }
+
+        .reference-link {
+            color: var(--primary-color);
+            text-decoration: none;
             font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .reference-link:hover {
+            text-decoration: underline;
+        }
+
+        /* 快捷问题 */
+        .quick-questions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .quick-question-btn {
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 20px;
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: #64748b;
+        }
+
+        .quick-question-btn:hover {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+            transform: translateY(-2px);
+            box-shadow: var(--card-shadow);
+        }
+
+        /* 欢迎消息 */
+        .welcome-message {
+            text-align: center;
+            padding: 3rem 2rem;
+            color: #64748b;
+        }
+
+        .welcome-message .icon {
+            font-size: 4rem;
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+        }
+
+        .welcome-message h2 {
+            color: #2d3748;
+            margin-bottom: 1rem;
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .header-card h1 {
+                font-size: 1.5rem;
+            }
+
+            .message-content {
+                max-width: 90%;
+            }
+
+            .send-btn {
+                padding: 0.75rem 1.5rem;
+            }
+        }
+
+        /* 滚动到底部按钮 */
+        .scroll-bottom-btn {
+            position: fixed;
+            bottom: 8rem;
+            right: 2rem;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            cursor: pointer;
+            box-shadow: var(--card-shadow-hover);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .scroll-bottom-btn:hover {
+            transform: translateY(-5px);
+        }
+
+        .scroll-bottom-btn.show {
+            display: flex;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="card">
-            <div class="card-header text-center py-3">
-                <h4>河南师范大学智能问答系统</h4>
-            </div>
-            <div class="card-body">
-                <div class="mb-3">
-                    <label for="questionInput" class="form-label">请输入您的问题：</label>
-                    <div class="input-group">
-                        <input type="text" class="form-control" id="questionInput" placeholder="例如：学校运动会是什么时候？">
-                        <button class="btn btn-primary" type="button" id="askBtn">提问</button>
-                    </div>
-                </div>
-                
-                <div id="loading" class="text-center">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">加载中...</span>
-                    </div>
-                    <p class="mt-2">正在思考中，请稍候...</p>
-                </div>
-                
-                <div id="resultArea"></div>
-            </div>
+    <div class="main-container">
+        <!-- 顶部标题 -->
+        <div class="header-card">
+            <h1><i class="bi bi-mortarboard-fill"></i> HTU智能问答助手</h1>
+            <p class="subtitle">河南师范大学教务处 · 智能检索 · 实时解答</p>
         </div>
-        
-        <div class="card">
-            <div class="card-header">
-                参考资料
+
+        <!-- 聊天容器 -->
+        <div class="chat-container" id="chatContainer">
+            <div class="welcome-message" id="welcomeMessage">
+                <div class="icon">
+                    <i class="bi bi-chat-dots"></i>
+                </div>
+                <h2>欢迎使用HTU智能问答助手</h2>
+                <p>我可以帮您解答关于学校教务、课程、考试、活动等各类问题</p>
+
+                <div class="quick-questions">
+                    <button class="quick-question-btn" onclick="askQuickQuestion('运动会是什么时间？')">
+                        <i class="bi bi-trophy"></i> 运动会时间
+                    </button>
+                    <button class="quick-question-btn" onclick="askQuickQuestion('学校什么时候选课？')">
+                        <i class="bi bi-journal-text"></i> 选课安排
+                    </button>
+                    <button class="quick-question-btn" onclick="askQuickQuestion('考试安排')">
+                        <i class="bi bi-pencil-square"></i> 考试安排
+                    </button>
+                    <button class="quick-question-btn" onclick="askQuickQuestion('如何转专业？')">
+                        <i class="bi bi-arrow-left-right"></i> 转专业
+                    </button>
+                </div>
             </div>
-            <div class="card-body" id="references">
-                <p class="text-muted">问题回答后，相关参考资料将显示在这里</p>
+
+            <div id="messagesContainer"></div>
+        </div>
+
+        <!-- 参考资料区域 -->
+        <div class="references-container" id="referencesContainer" style="display: none;">
+            <div class="references-title">
+                <i class="bi bi-bookmark-fill"></i> 参考资料
+            </div>
+            <div id="referencesContent"></div>
+        </div>
+
+        <!-- 输入区域 -->
+        <div class="input-container">
+            <div class="input-wrapper">
+                <input
+                    type="text"
+                    class="input-field"
+                    id="questionInput"
+                    placeholder="请输入您的问题..."
+                    autocomplete="off"
+                />
+                <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+                    <i class="bi bi-send-fill"></i>
+                    <span>发送</span>
+                </button>
             </div>
         </div>
     </div>
 
+    <!-- 滚动到底部按钮 -->
+    <button class="scroll-bottom-btn" id="scrollBottomBtn" onclick="scrollToBottom()">
+        <i class="bi bi-arrow-down"></i>
+    </button>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const questionInput = document.getElementById('questionInput');
-            const askBtn = document.getElementById('askBtn');
-            const loading = document.getElementById('loading');
-            const resultArea = document.getElementById('resultArea');
-            const references = document.getElementById('references');
-            
-            // 按回车键也可以提交问题
-            questionInput.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    askQuestion();
+        // 配置marked.js
+        marked.setOptions({
+            breaks: true,
+            gfm: true,
+            headerIds: false,
+            mangle: false,
+            highlight: function(code, lang) {
+                if (lang && hljs.getLanguage(lang)) {
+                    return hljs.highlight(code, { language: lang }).value;
                 }
+                return hljs.highlightAuto(code).value;
+            }
+        });
+
+        const chatContainer = document.getElementById('chatContainer');
+        const messagesContainer = document.getElementById('messagesContainer');
+        const questionInput = document.getElementById('questionInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const welcomeMessage = document.getElementById('welcomeMessage');
+        const referencesContainer = document.getElementById('referencesContainer');
+        const referencesContent = document.getElementById('referencesContent');
+        const scrollBottomBtn = document.getElementById('scrollBottomBtn');
+
+        let isProcessing = false;
+
+        // 回车发送
+        questionInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // 监听滚动，显示/隐藏滚动按钮
+        chatContainer.addEventListener('scroll', function() {
+            const scrollTop = chatContainer.scrollTop;
+            const scrollHeight = chatContainer.scrollHeight;
+            const clientHeight = chatContainer.clientHeight;
+
+            if (scrollHeight - scrollTop - clientHeight > 100) {
+                scrollBottomBtn.classList.add('show');
+            } else {
+                scrollBottomBtn.classList.remove('show');
+            }
+        });
+
+        // 快捷问题
+        function askQuickQuestion(question) {
+            questionInput.value = question;
+            sendMessage();
+        }
+
+        // 滚动到底部
+        function scrollToBottom() {
+            chatContainer.scrollTo({
+                top: chatContainer.scrollHeight,
+                behavior: 'smooth'
             });
-            
-            askBtn.addEventListener('click', askQuestion);
-            
-            function askQuestion() {
-                const question = questionInput.value.trim();
-                if (!question) return;
-                
-                // 显示加载动画
-                loading.style.display = 'block';
-                resultArea.innerHTML = '';
-                references.innerHTML = '<p class="text-muted">正在查找相关信息...</p>';
-                
-                // 发送请求到后端API
-                fetch(`/chat?q=${encodeURIComponent(question)}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        // 显示回答
-                        resultArea.innerHTML = `
-                            <div class="card result-card">
-                                <div class="card-body">
-                                    <h5 class="card-title">回答：</h5>
-                                    <p class="card-text">${data.answer.replace(/\n/g, '<br>')}</p>
-                                </div>
-                            </div>
-                        `;
-                        
-                        // 显示参考资料
-                        if (data.references && data.references.length > 0) {
-                            let refsHtml = '<h6>参考资料：</h6><div class="list-group">';
-                            data.references.forEach(ref => {
-                                refsHtml += `
-                                    <div class="list-group-item">
-                                        <h6 class="mb-1">${ref.title}</h6>
-                                        ${ref.source_url ? `<a href="${ref.source_url}" target="_blank" class="source-link">${ref.source_url}</a>` : ''}
-                                    </div>
-                                `;
-                            });
-                            refsHtml += '</div>';
-                            references.innerHTML = refsHtml;
-                        } else {
-                            references.innerHTML = '<p class="text-muted">没有找到相关参考资料</p>';
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
-                        resultArea.innerHTML = `
-                            <div class="alert alert-danger" role="alert">
-                                发生错误: ${error.message}
-                            </div>
-                        `;
-                    })
-                    .finally(() => {
-                        loading.style.display = 'none';
-                    });
+        }
+
+        // 添加用户消息
+        function addUserMessage(text) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message message-user';
+            messageDiv.innerHTML = `
+                <div class="message-content">
+                    ${escapeHtml(text)}
+                </div>
+                <div class="message-avatar">
+                    <i class="bi bi-person-fill"></i>
+                </div>
+            `;
+            messagesContainer.appendChild(messageDiv);
+            scrollToBottom();
+        }
+
+        // 添加助手消息（支持Markdown）
+        function addAssistantMessage(text, isLoading = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message message-assistant';
+
+            if (isLoading) {
+                messageDiv.innerHTML = `
+                    <div class="message-avatar">
+                        <i class="bi bi-robot"></i>
+                    </div>
+                    <div class="message-content loading-message">
+                        <div class="typing-indicator">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </div>
+                        <span>正在思考中...</span>
+                    </div>
+                `;
+            } else {
+                // 使用marked.js渲染Markdown
+                const htmlContent = marked.parse(text);
+                messageDiv.innerHTML = `
+                    <div class="message-avatar">
+                        <i class="bi bi-robot"></i>
+                    </div>
+                    <div class="message-content markdown-content">
+                        ${htmlContent}
+                    </div>
+                `;
+
+                // 高亮代码块
+                messageDiv.querySelectorAll('pre code').forEach((block) => {
+                    hljs.highlightElement(block);
+                });
             }
-            
-            // 如果URL中有q参数，自动加载问题
-            const urlParams = new URLSearchParams(window.location.search);
-            const question = urlParams.get('q');
-            if (question) {
-                questionInput.value = question;
-                // 等待页面完全加载后再触发问题
-                setTimeout(() => askQuestion(), 500);
+
+            messagesContainer.appendChild(messageDiv);
+            scrollToBottom();
+            return messageDiv;
+        }
+
+        // 更新助手消息（用于打字机效果）
+        function updateAssistantMessage(messageDiv, text) {
+            const htmlContent = marked.parse(text);
+            const contentDiv = messageDiv.querySelector('.message-content');
+            contentDiv.className = 'message-content markdown-content';
+            contentDiv.innerHTML = htmlContent;
+
+            // 高亮代码块
+            contentDiv.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
+
+            scrollToBottom();
+        }
+
+        // 打字机效果
+        async function typewriterEffect(messageDiv, fullText) {
+            const words = fullText.split('');
+            let currentText = '';
+
+            for (let i = 0; i < words.length; i++) {
+                currentText += words[i];
+                updateAssistantMessage(messageDiv, currentText);
+
+                // 根据字符类型调整速度
+                const char = words[i];
+                let delay = 20;
+                if (char === '\n') delay = 50;
+                else if (char === '。' || char === '！' || char === '？') delay = 100;
+                else if (char === '，' || char === '、') delay = 50;
+
+                await new Promise(resolve => setTimeout(resolve, delay));
             }
+        }
+
+        // 显示参考资料
+        function showReferences(references) {
+            if (!references || references.length === 0) {
+                referencesContainer.style.display = 'none';
+                return;
+            }
+
+            let html = '';
+            references.forEach((ref, index) => {
+                html += `
+                    <div class="reference-item">
+                        <div class="reference-title">
+                            <i class="bi bi-file-text"></i> ${ref.title || '未命名文档'}
+                        </div>
+                        ${ref.source_url ? `
+                            <a href="${ref.source_url}" target="_blank" class="reference-link">
+                                <i class="bi bi-link-45deg"></i>
+                                查看原文
+                            </a>
+                        ` : ''}
+                    </div>
+                `;
+            });
+
+            referencesContent.innerHTML = html;
+            referencesContainer.style.display = 'block';
+        }
+
+        // 显示错误消息
+        function showError(message) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message message-assistant';
+            messageDiv.innerHTML = `
+                <div class="message-avatar" style="background: linear-gradient(135deg, #f5365c, #fb6340);">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                </div>
+                <div class="message-content">
+                    <strong style="color: #f5365c;">发生错误</strong><br>
+                    ${escapeHtml(message)}<br>
+                    <small style="color: #64748b; margin-top: 0.5rem; display: block;">
+                        请检查后端服务是否正常运行，或稍后重试
+                    </small>
+                </div>
+            `;
+            messagesContainer.appendChild(messageDiv);
+            scrollToBottom();
+        }
+
+        // HTML转义
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 发送消息
+        async function sendMessage() {
+            const question = questionInput.value.trim();
+            if (!question || isProcessing) return;
+
+            // 隐藏欢迎消息
+            if (welcomeMessage) {
+                welcomeMessage.style.display = 'none';
+            }
+
+            // 添加用户消息
+            addUserMessage(question);
+
+            // 清空输入框
+            questionInput.value = '';
+
+            // 禁用发送按钮
+            isProcessing = true;
+            sendBtn.disabled = true;
+            sendBtn.innerHTML = '<i class="bi bi-hourglass-split"></i><span>处理中...</span>';
+
+            // 显示加载消息
+            const loadingMessage = addAssistantMessage('', true);
+
+            try {
+                // 调用API
+                const response = await fetch(`/chat?q=${encodeURIComponent(question)}`);
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || '服务器错误');
+                }
+
+                const data = await response.json();
+
+                // 移除加载消息
+                loadingMessage.remove();
+
+                // 获取回答
+                const answer = data.answer || '未能生成回答，请检查后端服务配置。';
+
+                // 创建助手消息并使用打字机效果
+                const assistantMessage = addAssistantMessage('');
+                await typewriterEffect(assistantMessage, answer);
+
+                // 显示参考资料
+                showReferences(data.references);
+
+            } catch (error) {
+                console.error('Error:', error);
+                loadingMessage.remove();
+                showError(error.message);
+            } finally {
+                // 恢复发送按钮
+                isProcessing = false;
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = '<i class="bi bi-send-fill"></i><span>发送</span>';
+                questionInput.focus();
+            }
+        }
+
+        // URL参数自动提问
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlQuestion = urlParams.get('q');
+        if (urlQuestion) {
+            questionInput.value = urlQuestion;
+            setTimeout(() => sendMessage(), 500);
+        }
+
+        // 页面加载完成，聚焦输入框
+        window.addEventListener('load', function() {
+            questionInput.focus();
         });
     </script>
 </body>

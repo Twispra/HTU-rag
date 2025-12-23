@@ -32,37 +32,56 @@ class QAService:
         Returns:
             ChatResponse 包含答案和参考文档
         """
-        # 检索相关文档
-        docs = self.retrieval.retrieve(question)
+        try:
+            # 检索相关文档
+            docs = self.retrieval.retrieve(question)
 
-        if not docs:
-            return ChatResponse(
-                query=question,
-                answer="未找到相关内容。",
-                references=[]
-            )
-
-        # 构建 Prompt
-        messages = PromptTemplates.format_rag_prompt(question, docs)
-
-        # 调用 LLM 生成答案
-        answer = self.llm.chat(messages)
-
-        # 去重参考文档
-        unique_refs = {}
-        for d in docs:
-            key = d.get("source_url") or d["titles"][0]
-            if key not in unique_refs:
-                unique_refs[key] = DocumentReference(
-                    title=d["titles"][0],
-                    source_url=d.get("source_url")
+            if not docs:
+                return ChatResponse(
+                    query=question,
+                    answer="抱歉，未找到相关内容。请尝试换个方式提问。",
+                    references=[]
                 )
 
-        return ChatResponse(
-            query=question,
-            answer=answer,
-            references=list(unique_refs.values())
-        )
+            # 构建 Prompt
+            messages = PromptTemplates.format_rag_prompt(question, docs)
+
+            # 调用 LLM 生成答案
+            try:
+                answer = self.llm.chat(messages)
+                if not answer or not answer.strip():
+                    answer = "抱歉，生成回答时出现问题。请稍后再试。"
+            except Exception as e:
+                print(f"LLM调用失败: {e}")
+                # LLM调用失败时，返回检索到的文档摘要
+                answer = "（由于LLM服务暂时不可用，以下是相关文档摘要）\n\n"
+                for i, d in enumerate(docs[:3], 1):
+                    answer += f"{i}. {d['titles'][0]}\n{d['text'][:200]}...\n\n"
+
+            # 去重参考文档
+            unique_refs = {}
+            for d in docs:
+                key = d.get("source_url") or d["titles"][0]
+                if key not in unique_refs:
+                    unique_refs[key] = DocumentReference(
+                        title=d["titles"][0],
+                        source_url=d.get("source_url")
+                    )
+
+            return ChatResponse(
+                query=question,
+                answer=answer,
+                references=list(unique_refs.values())
+            )
+        except Exception as e:
+            print(f"问答服务错误: {e}")
+            import traceback
+            traceback.print_exc()
+            return ChatResponse(
+                query=question,
+                answer=f"抱歉，处理您的问题时出现错误：{str(e)}\n\n请检查：\n1. 向量索引是否已构建\n2. API密钥是否配置正确\n3. 网络连接是否正常",
+                references=[]
+            )
 
     def preview_search(self, query: str) -> List[SearchPreviewItem]:
         """

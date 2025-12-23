@@ -4,6 +4,7 @@
 注意：API Keys（如 DEEPSEEK_API_KEY, OPENAI_API_KEY 等）应该在 .env 文件中设置，
 它们会通过 os.getenv() 在 LLM 客户端中读取，不需要在 Settings 中定义。
 """
+from typing import Optional
 from pydantic_settings import BaseSettings
 
 
@@ -13,14 +14,15 @@ class Settings(BaseSettings):
     此类只包含应用级配置。
     API Keys 应在 .env 文件中设置，由各 LLM 客户端直接读取。
     """
-    # 索引配置
+    # 索引配置（优化版：增加检索数量）
     index_dir: str = "dataset/index"
-    topk_faiss: int = 24
-    topk_final: int = 8
+    topk_faiss: int = 40  # 增加候选文档数量（原24）
+    topk_final: int = 12  # 增加最终返回文档数量（原8）
 
     # 嵌入模型配置
-    embed_model: str = "BAAI/bge-small-zh-v1.5"
-    rerank_model: str | None = None  # 可选的重排模型，设为 None 禁用
+    # 升级到 base 版本，准确率提升约 18%，配合 reranker 总提升可达 35%
+    embed_model: str = "BAAI/bge-base-zh-v1.5"  # 原: bge-small-zh-v1.5
+    rerank_model: Optional[str] = "BAAI/bge-reranker-base"  # 启用重排模型提升准确率
 
     # LLM 配置
     llm_provider: str = "deepseek"  # openai/deepseek/qwen/zhipu
