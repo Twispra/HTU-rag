@@ -1,28 +1,31 @@
 # -*- coding: utf-8 -*-
 """API Routes"""
 from fastapi import APIRouter, Query, HTTPException
-from typing import List
+from typing import List, cast
+
 from app.models.schemas import ChatResponse, SearchPreviewItem
+from app.services.qa import QAService
 
 
 router = APIRouter()
 
 
 # 全局 QA 服务实例（由 main.py 注入）
-_qa_service = None
+_qa_service: QAService | None = None
 
 
-def set_qa_service(qa_service):
+def set_qa_service(qa_service: QAService) -> None:
     """设置全局 QA 服务实例（由 main.py 调用）"""
     global _qa_service
     _qa_service = qa_service
 
 
-def get_qa_service():
+def get_qa_service() -> QAService:
     """获取 QA 服务实例"""
     if _qa_service is None:
         raise RuntimeError("QA Service not initialized")
-    return _qa_service
+    qa_service: QAService = _qa_service
+    return qa_service
 
 
 @router.get(
@@ -39,7 +42,7 @@ async def ask(q: str = Query(..., description="查询问题", min_length=1)):
     - **返回**: 相关文档列表（包含高亮摘要）
     """
     try:
-        qa = get_qa_service()
+        qa = cast(QAService, get_qa_service())
         return qa.preview_search(q)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -59,8 +62,7 @@ async def chat(q: str = Query(..., description="查询问题", min_length=1)):
     - **返回**: 生成的答案 + 参考文档
     """
     try:
-        qa = get_qa_service()
+        qa = cast(QAService, get_qa_service())
         return qa.answer_question(q)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
