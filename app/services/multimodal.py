@@ -1,0 +1,271 @@
+# -*- coding: utf-8 -*-
+"""Multimodal Processing Service (Image & Audio)"""
+import os
+from pathlib import Path
+from typing import Optional, Union, Tuple, Dict
+import numpy as np
+from PIL import Image
+import io
+
+# Lazy imports to avoid loading heavy models at startup
+_clip_model = None
+_clip_processor = None
+_whisper_model = None
+_ocr_reader = None
+
+
+class MultimodalService:
+    """多模态处理服务（图片、音频）"""
+
+    def __init__(self,
+                 clip_model_name: str = "openai/clip-vit-base-patch32",
+                 whisper_model_name: str = "base",
+                 use_ocr: bool = True,
+                 media_dir: str = "dataset/media"):
+        """
+        初始化多模态服务
+
+        Args:
+            clip_model_name: CLIP 模型名称（用于图片特征提取）
+            whisper_model_name: Whisper 模型大小 (tiny/base/small/medium/large)
+            use_ocr: 是否启用 OCR（提取图片中的文字）
+            media_dir: 媒体文件存储目录
+        """
+        self.clip_model_name = clip_model_name
+        self.whisper_model_name = whisper_model_name
+        self.use_ocr = use_ocr
+        self.media_dir = Path(media_dir)
+        self.media_dir.mkdir(parents=True, exist_ok=True)
+
+    @property
+    def clip_model(self):
+        """延迟加载 CLIP 模型"""
+        global _clip_model, _clip_processor
+        if _clip_model is None:
+            print(f"正在加载 CLIP 模型: {self.clip_model_name}")
+            from transformers import CLIPModel, CLIPProcessor
+            _clip_model = CLIPModel.from_pretrained(self.clip_model_name)
+            _clip_processor = CLIPProcessor.from_pretrained(self.clip_model_name)
+            print("CLIP 模型加载完成")
+        return _clip_model, _clip_processor
+
+    @property
+    def whisper_model(self):
+        """延迟加载 Whisper 模型"""
+        global _whisper_model
+        if _whisper_model is None:
+            print(f"正在加载 Whisper 模型: {self.whisper_model_name}")
+            try:
+                import whisper
+                _whisper_model = whisper.load_model(self.whisper_model_name)
+                print("Whisper 模型加载完成")
+            except ImportError:
+                print("警告: whisper 未安装，音频功能不可用")
+                print("安装方法: pip install openai-whisper")
+                _whisper_model = None
+        return _whisper_model
+
+    @property
+    def ocr_reader(self):
+        """延迟加载 OCR 模型"""
+        global _ocr_reader
+        if _ocr_reader is None and self.use_ocr:
+            print("正在加载 PaddleOCR 模型")
+            try:
+                from paddleocr import PaddleOCR
+                _ocr_reader = PaddleOCR(use_angle_cls=True, lang="ch", show_log=False)
+                print("OCR 模型加载完成")
+            except ImportError:
+                print("警告: paddleocr 未安装，OCR 功能不可用")
+                print("安装方法: pip install paddleocr paddlepaddle")
+                _ocr_reader = None
+        return _ocr_reader
+
+    def extract_image_features(self, image_input: Union[str, Path, Image.Image, bytes]) -> Tuple[np.ndarray, Optional[str]]:
+        """
+        提取图片特征向量和文字内容
+
+        Args:
+            image_input: 图片路径、PIL Image 对象或字节数据
+
+        Returns:
+            (image_embedding, ocr_text)
+        """
+        # 加载图片
+        if isinstance(image_input, (str, Path)):
+            image = Image.open(image_input).convert("RGB")
+        elif isinstance(image_input, bytes):
+            image = Image.open(io.BytesIO(image_input)).convert("RGB")
+        elif isinstance(image_input, Image.Image):
+            image = image.convert("RGB")
+        else:
+            raise ValueError(f"不支持的图片输入类型: {type(image_input)}")
+
+        # 提取 CLIP 特征
+        model, processor = self.clip_model
+        inputs = processor(images=image, return_tensors="pt")
+
+        with __import__('torch').no_grad():
+            image_features = model.get_image_features(**inputs)
+            # 归一化
+            image_embedding = image_features / image_features.norm(dim=-1, keepdim=True)
+            image_embedding = image_embedding.cpu().numpy().flatten()
+
+        # OCR 提取文字（可选）
+        ocr_text = None
+        if self.use_ocr and self.ocr_reader:
+            try:
+                # PaddleOCR 需要 numpy array
+                img_array = np.array(image)
+                result = self.ocr_reader.ocr(img_array, cls=True)
+                if result and result[0]:
+                    ocr_text = "\n".join([line[1][0] for line in result[0]])
+            except Exception as e:
+                print(f"OCR 处理失败: {e}")
+
+        return image_embedding, ocr_text
+
+    def extract_audio_features(self, audio_path: Union[str, Path]) -> Tuple[str, Optional[np.ndarray]]:
+        """
+        提取音频特征（转文字 + 可选的音频 embedding）
+
+        Args:
+            audio_path: 音频文件路径
+
+        Returns:
+            (transcribed_text, audio_embedding)
+        """
+        audio_path = str(audio_path)
+
+        # Whisper 转录
+        model = self.whisper_model
+        if model is None:
+            raise RuntimeError("Whisper 模型未安装或加载失败")
+
+        result = model.transcribe(audio_path, language="zh")
+        transcribed_text = result["text"]
+
+        # 可选：提取音频特征向量（使用 Whisper encoder）
+        # 注意：这里简化处理，实际可以用更专业的音频 embedding 模型
+        audio_embedding = None
+        try:
+            import torch
+            import whisper
+            audio = whisper.load_audio(audio_path)
+            audio = whisper.pad_or_trim(audio)
+            mel = whisper.log_mel_spectrogram(audio).to(model.device)
+
+            with torch.no_grad():
+                audio_features = model.embed_audio(mel.unsqueeze(0))
+                audio_embedding = audio_features.cpu().numpy().flatten()
+        except Exception as e:
+            print(f"音频特征提取失败: {e}")
+
+        return transcribed_text, audio_embedding
+
+    def encode_text_for_image_search(self, text: str) -> np.ndarray:
+        """
+        将文本编码为可以与图片特征比较的向量（使用 CLIP 文本编码器）
+
+        Args:
+            text: 查询文本
+
+        Returns:
+            text_embedding (与图片在同一向量空间)
+        """
+        model, processor = self.clip_model
+        inputs = processor(text=[text], return_tensors="pt", padding=True)
+
+        with __import__('torch').no_grad():
+            text_features = model.get_text_features(**inputs)
+            # 归一化
+            text_embedding = text_features / text_features.norm(dim=-1, keepdim=True)
+            text_embedding = text_embedding.cpu().numpy().flatten()
+
+        return text_embedding
+
+    def save_media(self, file_bytes: bytes, filename: str, media_type: str = "image") -> Path:
+        """
+        保存媒体文件到本地
+
+        Args:
+            file_bytes: 文件字节数据
+            filename: 文件名
+            media_type: 媒体类型 (image/audio)
+
+        Returns:
+            保存的文件路径
+        """
+        type_dir = self.media_dir / media_type
+        type_dir.mkdir(parents=True, exist_ok=True)
+
+        file_path = type_dir / filename
+        with open(file_path, "wb") as f:
+            f.write(file_bytes)
+
+        return file_path
+
+    def process_multimodal_query(self,
+                                  text: Optional[str] = None,
+                                  image: Optional[Union[str, bytes]] = None,
+                                  audio: Optional[Union[str, bytes]] = None) -> Dict[str, any]:
+        """
+        处理多模态查询（文本 + 图片 + 音频）
+
+        Args:
+            text: 文本查询
+            image: 图片（路径或字节）
+            audio: 音频（路径或字节）
+
+        Returns:
+            处理结果字典
+        """
+        result = {
+            "text_query": text or "",
+            "image_embedding": None,
+            "image_ocr_text": None,
+            "audio_text": None,
+            "audio_embedding": None,
+            "combined_text": ""
+        }
+
+        text_parts = []
+        if text:
+            text_parts.append(text)
+
+        # 处理图片
+        if image:
+            try:
+                if isinstance(image, bytes):
+                    # 保存临时文件
+                    temp_path = self.save_media(image, f"temp_query_{os.urandom(8).hex()}.jpg", "image")
+                    img_emb, ocr_text = self.extract_image_features(temp_path)
+                else:
+                    img_emb, ocr_text = self.extract_image_features(image)
+
+                result["image_embedding"] = img_emb
+                result["image_ocr_text"] = ocr_text
+                if ocr_text:
+                    text_parts.append(f"[图片文字]: {ocr_text}")
+            except Exception as e:
+                print(f"图片处理失败: {e}")
+
+        # 处理音频
+        if audio:
+            try:
+                if isinstance(audio, bytes):
+                    temp_path = self.save_media(audio, f"temp_query_{os.urandom(8).hex()}.wav", "audio")
+                    audio_text, audio_emb = self.extract_audio_features(temp_path)
+                else:
+                    audio_text, audio_emb = self.extract_audio_features(audio)
+
+                result["audio_text"] = audio_text
+                result["audio_embedding"] = audio_emb
+                if audio_text:
+                    text_parts.append(f"[音频内容]: {audio_text}")
+            except Exception as e:
+                print(f"音频处理失败: {e}")
+
+        result["combined_text"] = " ".join(text_parts)
+        return result
+

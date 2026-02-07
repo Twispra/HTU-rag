@@ -30,6 +30,16 @@ class Settings(BaseSettings):
     llm_temperature: float = 0.7
     llm_max_tokens: int = 2048
 
+    # 多模态配置
+    enable_multimodal: bool = False  # 是否启用多模态功能
+    clip_model: str = "openai/clip-vit-base-patch32"  # CLIP 图片特征提取模型
+    whisper_model: str = "base"  # Whisper 音频转文本模型 (tiny/base/small/medium/large)
+    use_ocr: bool = True  # 是否启用 OCR 图片文字识别
+    media_dir: str = "dataset/media"  # 媒体文件存储目录
+    image_index_path: Optional[str] = "dataset/index/faiss_image.index"  # 图片向量索引路径
+    audio_index_path: Optional[str] = "dataset/index/faiss_audio.index"  # 音频向量索引路径
+    multimodal_fusion_weights: dict = {"text": 0.5, "image": 0.3, "audio": 0.2}  # 多模态融合权重
+
     class Config:
         env_file = ".env"  # 可用 .env 覆盖
         env_file_encoding = "utf-8"

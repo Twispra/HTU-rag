@@ -1,0 +1,25 @@
+# requirements.txt for the project
+# Core dependencies
+sentence-transformers
+numpy
+faiss-cpu
+tqdm
+bs4
+FlagEmbedding
+pydantic
+pydantic-settings
+fastapi
+uvicorn[standard]
+jinja2
+python-multipart
+openai
+
+# Multimodal dependencies (optional, only needed if enable_multimodal=True)
+transformers>=4.30.0
+torch>=2.0.0
+torchvision>=0.15.0
+openai-whisper
+Pillow>=9.0.0
+paddleocr>=2.6.0
+paddlepaddle>=2.4.0
+
