@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Multimodal Processing Service (Image & Audio)"""
 import os
+import tempfile
 from pathlib import Path
 from typing import Optional, Union, Tuple, Dict
 import numpy as np
@@ -237,9 +238,7 @@ class MultimodalService:
         if image:
             try:
                 if isinstance(image, bytes):
-                    # 保存临时文件
-                    temp_path = self.save_media(image, f"temp_query_{os.urandom(8).hex()}.jpg", "image")
-                    img_emb, ocr_text = self.extract_image_features(temp_path)
+                    img_emb, ocr_text = self.extract_image_features(image)
                 else:
                     img_emb, ocr_text = self.extract_image_features(image)
 
@@ -253,11 +252,21 @@ class MultimodalService:
         # 处理音频
         if audio:
             try:
-                if isinstance(audio, bytes):
-                    temp_path = self.save_media(audio, f"temp_query_{os.urandom(8).hex()}.wav", "audio")
-                    audio_text, audio_emb = self.extract_audio_features(temp_path)
-                else:
-                    audio_text, audio_emb = self.extract_audio_features(audio)
+                temp_path = None
+                try:
+                    if isinstance(audio, bytes):
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
+                            tmp.write(audio)
+                            temp_path = tmp.name
+                        audio_text, audio_emb = self.extract_audio_features(temp_path)
+                    else:
+                        audio_text, audio_emb = self.extract_audio_features(audio)
+                finally:
+                    if temp_path:
+                        try:
+                            os.remove(temp_path)
+                        except OSError:
+                            pass
 
                 result["audio_text"] = audio_text
                 result["audio_embedding"] = audio_emb

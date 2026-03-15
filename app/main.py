@@ -86,7 +86,8 @@ async def lifespan(app: FastAPI):
                 index_dir=settings.index_dir,
                 topk_per_modality=20,
                 topk_final=settings.topk_final,
-                fusion_weights=settings.multimodal_fusion_weights
+                fusion_weights=settings.multimodal_fusion_weights,
+                enable_media_retrieval=settings.enable_media_retrieval
             )
 
             # 初始化多模态问答服务

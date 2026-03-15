@@ -29,59 +29,53 @@ class MultimodalQAService:
                                    text: Optional[str] = None,
                                    image: Optional[bytes] = None,
                                    audio: Optional[bytes] = None) -> MultimodalChatResponse:
-        """
-        多模态问答（RAG 生成）
-
-        Args:
-            text: 文本查询
-            image: 图片字节数据
-            audio: 音频字节数据
-
-        Returns:
-            MultimodalChatResponse 包含答案、参考文档和媒体引用
-        """
+        """Multimodal QA (RAG generation)."""
         try:
-            # 处理多模态输入
+            # Preprocess once to avoid duplicate work
             multimodal_result = self.retrieval.multimodal.process_multimodal_query(text, image, audio)
-            combined_query = multimodal_result["combined_text"]
+            combined_query = multimodal_result.get("combined_text", "")
+            query_for_prompt = combined_query or text or "[multimodal query]"
 
-            if not combined_query:
+            # Campus QA default: use OCR/ASR text only (unless media retrieval is enabled)
+            if not combined_query and not self.retrieval.enable_media_retrieval:
                 return MultimodalChatResponse(
-                    query=text or "[多模态查询]",
-                    answer="请提供文本、图片或音频查询内容。",
+                    query=query_for_prompt,
+                    answer=(
+                        "No readable text was detected from the image/audio. "
+                        "Please provide a clearer image/audio or type the question in text."
+                    ),
                     references=[],
                     image_ocr_text=multimodal_result.get("image_ocr_text"),
                     audio_transcription=multimodal_result.get("audio_text")
                 )
 
-            # 多模态检索
-            docs = self.retrieval.retrieve_multimodal(text, image, audio)
+            # Retrieval (use preprocessed result)
+            docs = self.retrieval.retrieve_multimodal(text, image, audio, preprocessed=multimodal_result)
 
             if not docs:
                 return MultimodalChatResponse(
-                    query=combined_query,
-                    answer="抱歉，未找到相关内容。请尝试换个方式提问。",
+                    query=query_for_prompt,
+                    answer="No relevant content found. Please rephrase or add more specific details.",
                     references=[],
                     image_ocr_text=multimodal_result.get("image_ocr_text"),
                     audio_transcription=multimodal_result.get("audio_text")
                 )
 
-            # 构建 Prompt（增强多模态信息）
-            messages = self._format_multimodal_prompt(combined_query, docs, multimodal_result)
+            # Build prompt
+            messages = self._format_multimodal_prompt(query_for_prompt, docs, multimodal_result)
 
-            # 调用 LLM 生成答案
+            # LLM generation
             try:
                 answer = self.llm.chat(messages)
                 if not answer or not answer.strip():
-                    answer = "抱歉，生成回答时出现问题。请稍后再试。"
+                    answer = "Sorry, there was a problem generating the response. Please try again."
             except Exception as e:
-                print(f"LLM调用失败: {e}")
-                # 降级：返回检索摘要
-                answer = "（由于LLM服务暂时不可用，以下是相关文档摘要）\n\n"
+                print(f"LLM call failed: {e}")
+                answer = "(LLM unavailable; here are relevant snippets.)\n\n"
                 for i, d in enumerate(docs[:3], 1):
                     answer += f"{i}. {d['titles'][0]}\n{d['text'][:200]}...\n\n"
 
-            # 去重参考文档
+            # Deduplicate references
             unique_refs = {}
             media_refs = []
 
@@ -93,7 +87,6 @@ class MultimodalQAService:
                         source_url=d.get("source_url")
                     )
 
-                # 收集媒体引用
                 if "media_url" in d and "media_type" in d:
                     media_refs.append(MediaReference(
                         media_type=d["media_type"],
@@ -104,7 +97,7 @@ class MultimodalQAService:
                     ))
 
             return MultimodalChatResponse(
-                query=combined_query,
+                query=query_for_prompt,
                 answer=answer,
                 references=list(unique_refs.values()),
                 media_references=media_refs,
@@ -112,12 +105,12 @@ class MultimodalQAService:
                 audio_transcription=multimodal_result.get("audio_text")
             )
         except Exception as e:
-            print(f"多模态问答服务错误: {e}")
+            print(f"Multimodal QA error: {e}")
             import traceback
             traceback.print_exc()
             return MultimodalChatResponse(
-                query=text or "[多模态查询]",
-                answer=f"抱歉，处理您的问题时出现错误：{str(e)}",
+                query=text or "[multimodal query]",
+                answer=f"Sorry, an error occurred while processing your request: {str(e)}",
                 references=[]
             )
 
@@ -125,36 +118,23 @@ class MultimodalQAService:
                                   text: Optional[str] = None,
                                   image: Optional[bytes] = None,
                                   audio: Optional[bytes] = None) -> List[MultimodalSearchPreviewItem]:
-        """
-        多模态检索预览（不调用 LLM）
-
-        Args:
-            text: 文本查询
-            image: 图片字节数据
-            audio: 音频字节数据
-
-        Returns:
-            检索结果列表
-        """
-        # 处理多模态输入
+        """Multimodal preview search (no LLM)."""
         multimodal_result = self.retrieval.multimodal.process_multimodal_query(text, image, audio)
-        combined_query = multimodal_result["combined_text"]
+        combined_query = multimodal_result.get("combined_text", "")
 
-        if not combined_query:
+        if not combined_query and not self.retrieval.enable_media_retrieval:
             return []
 
-        # 多模态检索
-        docs = self.retrieval.retrieve_multimodal(text, image, audio)
+        docs = self.retrieval.retrieve_multimodal(text, image, audio, preprocessed=multimodal_result)
 
-        # 提取关键词用于高亮
-        keywords = re.split(r"[，。；,.!?、\s]+", combined_query)
+        keywords = re.split(r"[，。；,.!?\s]+", combined_query) if combined_query else []
 
         results = []
         for d in docs:
-            snippet = self._highlight(d["text"], keywords)[:200]
+            snippet = self._highlight(d.get("text", ""), keywords)[:200]
 
             results.append(MultimodalSearchPreviewItem(
-                title=d["titles"][0] if isinstance(d["titles"], list) else d["titles"],
+                title=d["titles"][0] if isinstance(d.get("titles"), list) else d.get("titles", ""),
                 publish_date=d.get("publish_date"),
                 snippet=snippet,
                 source_url=d.get("source_url"),

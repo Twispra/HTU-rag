@@ -32,6 +32,7 @@ class Settings(BaseSettings):
 
     # 多模态配置
     enable_multimodal: bool = False  # 是否启用多模态功能
+    enable_media_retrieval: bool = False  # 是否启用图片/音频索引检索并与文本融合
     clip_model: str = "openai/clip-vit-base-patch32"  # CLIP 图片特征提取模型
     whisper_model: str = "base"  # Whisper 音频转文本模型 (tiny/base/small/medium/large)
     use_ocr: bool = True  # 是否启用 OCR 图片文字识别

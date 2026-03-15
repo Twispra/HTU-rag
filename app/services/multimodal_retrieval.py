@@ -18,7 +18,8 @@ class MultimodalRetrievalService:
                  index_dir: str,
                  topk_per_modality: int = 20,
                  topk_final: int = 12,
-                 fusion_weights: Optional[Dict[str, float]] = None):
+                 fusion_weights: Optional[Dict[str, float]] = None,
+                 enable_media_retrieval: bool = False):
         """
         初始化多模态检索服务
 
@@ -36,6 +37,7 @@ class MultimodalRetrievalService:
         self.topk_per_modality = topk_per_modality
         self.topk_final = topk_final
         self.fusion_weights = fusion_weights or {"text": 0.5, "image": 0.3, "audio": 0.2}
+        self.enable_media_retrieval = enable_media_retrieval
 
         # 延迟加载的私有属性
         self._image_index: Optional[faiss.Index] = None
@@ -100,27 +102,27 @@ class MultimodalRetrievalService:
     def retrieve_multimodal(self,
                            text: Optional[str] = None,
                            image: Optional[bytes] = None,
-                           audio: Optional[bytes] = None) -> List[Dict]:
+                           audio: Optional[bytes] = None,
+                           preprocessed: Optional[Dict] = None) -> List[Dict]:
         """
-        多模态检索（文本 + 图片 + 音频融合）
+        Multimodal retrieval (text + image + audio fusion).
 
         Args:
-            text: 文本查询
-            image: 图片字节数据
-            audio: 音频字节数据
+            text: Text query
+            image: Image bytes
+            audio: Audio bytes
+            preprocessed: Optional preprocessed result to avoid duplicate work
 
         Returns:
-            融合后的检索结果列表
+            Fused retrieval results
         """
-        results_by_modality = {}
+        results_by_modality: Dict[str, List[Dict]] = {}
 
-        # 1. 处理多模态输入，提取特征
-        multimodal_result = self.multimodal.process_multimodal_query(text, image, audio)
+        # 1) Preprocess multimodal inputs
+        multimodal_result = preprocessed or self.multimodal.process_multimodal_query(text, image, audio)
+        combined_text = multimodal_result.get("combined_text", "")
 
-        # 构建完整的文本查询（包含 OCR 和音频转录）
-        combined_text = multimodal_result["combined_text"]
-
-        # 2. 文本检索
+        # 2) Text retrieval (primary for campus QA)
         if combined_text:
             try:
                 text_docs = self.text_retrieval.retrieve(combined_text)
@@ -129,48 +131,51 @@ class MultimodalRetrievalService:
                     for i, doc in enumerate(text_docs[:self.topk_per_modality])
                 ]
             except Exception as e:
-                print(f"文本检索失败: {e}")
+                print(f"Text retrieval failed: {e}")
                 results_by_modality["text"] = []
 
-        # 3. 图片检索（如果有图片输入且索引存在）
-        if image and self.image_index and self.image_metas:
-            try:
-                image_emb = multimodal_result["image_embedding"]
-                if image_emb is not None:
-                    # 搜索图片索引
-                    image_emb = image_emb.reshape(1, -1).astype("float32")
-                    D, I = self.image_index.search(image_emb, self.topk_per_modality)
+        # 3) Optional media retrieval
+        if self.enable_media_retrieval:
+            if image and self.image_index and self.image_metas:
+                try:
+                    image_emb = multimodal_result.get("image_embedding")
+                    if image_emb is not None:
+                        image_emb = image_emb.reshape(1, -1).astype("float32")
+                        D, I = self.image_index.search(image_emb, self.topk_per_modality)
+                        results_by_modality["image"] = [
+                            {"doc": self.image_metas[i], "score": float(D[0][idx]), "modality": "image"}
+                            for idx, i in enumerate(I[0]) if i < len(self.image_metas)
+                        ]
+                except Exception as e:
+                    print(f"Image retrieval failed: {e}")
+                    results_by_modality["image"] = []
 
-                    results_by_modality["image"] = [
-                        {"doc": self.image_metas[i], "score": float(D[0][idx]), "modality": "image"}
-                        for idx, i in enumerate(I[0]) if i < len(self.image_metas)
-                    ]
-            except Exception as e:
-                print(f"图片检索失败: {e}")
-                results_by_modality["image"] = []
+            if audio and self.audio_index and self.audio_metas:
+                try:
+                    audio_emb = multimodal_result.get("audio_embedding")
+                    if audio_emb is not None:
+                        audio_emb = audio_emb.reshape(1, -1).astype("float32")
+                        D, I = self.audio_index.search(audio_emb, self.topk_per_modality)
+                        results_by_modality["audio"] = [
+                            {"doc": self.audio_metas[i], "score": float(D[0][idx]), "modality": "audio"}
+                            for idx, i in enumerate(I[0]) if i < len(self.audio_metas)
+                        ]
+                except Exception as e:
+                    print(f"Audio retrieval failed: {e}")
+                    results_by_modality["audio"] = []
 
-        # 4. 音频检索（如果有音频输入且索引存在）
-        if audio and self.audio_index and self.audio_metas:
-            try:
-                audio_emb = multimodal_result["audio_embedding"]
-                if audio_emb is not None:
-                    # 搜索音频索引
-                    audio_emb = audio_emb.reshape(1, -1).astype("float32")
-                    D, I = self.audio_index.search(audio_emb, self.topk_per_modality)
-
-                    results_by_modality["audio"] = [
-                        {"doc": self.audio_metas[i], "score": float(D[0][idx]), "modality": "audio"}
-                        for idx, i in enumerate(I[0]) if i < len(self.audio_metas)
-                    ]
-            except Exception as e:
-                print(f"音频检索失败: {e}")
-                results_by_modality["audio"] = []
-
-        # 5. 融合多模态检索结果
+        # 4) Fuse results
         fused_results = self._fuse_results(results_by_modality)
 
-        # 6. 返回 Top-K
-        return [item["doc"] for item in fused_results[:self.topk_final]]
+        # 5) Return Top-K with scores
+        packed_results: List[Dict] = []
+        for item in fused_results[:self.topk_final]:
+            doc = dict(item["doc"])
+            doc["score"] = item["total_score"]
+            doc["modalities"] = item["modalities"]
+            packed_results.append(doc)
+
+        return packed_results
 
     def _fuse_results(self, results_by_modality: Dict[str, List[Dict]]) -> List[Dict]:
         """
@@ -228,7 +233,13 @@ class MultimodalRetrievalService:
             # 搜索
             D, I = self.image_index.search(text_emb, topk)
 
-            results = [self.image_metas[i] for i in I[0] if i < len(self.image_metas)]
+            results: List[Dict] = []
+            for idx, i in enumerate(I[0]):
+                if i >= len(self.image_metas):
+                    continue
+                doc = dict(self.image_metas[i])
+                doc["score"] = float(D[0][idx])
+                results.append(doc)
             return results
         except Exception as e:
             print(f"图片相似度检索失败: {e}")
