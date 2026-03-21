@@ -301,15 +301,20 @@
         .input-wrapper {
             display: flex;
             gap: 0.75rem;
-            align-items: center;
+            align-items: flex-end;
         }
 
         .input-field {
             flex: 1;
             border: 2px solid #e2e8f0;
             border-radius: 12px;
-            padding: 0.75rem 1.25rem;
+            padding: 0.65rem 1.1rem;
             font-size: 1rem;
+            line-height: 1.5;
+            min-height: 46px;
+            max-height: 140px;
+            resize: none;
+            overflow-y: auto;
             transition: all 0.3s ease;
         }
 
@@ -489,6 +494,28 @@
             display: none;
             font-size: 0.85rem;
             color: var(--danger-color);
+        }
+
+        .input-hint {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem 1rem;
+            font-size: 0.8rem;
+            color: #94a3b8;
+        }
+
+        .hint-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            background: #f1f5f9;
+            border-radius: 999px;
+            padding: 0.25rem 0.6rem;
+        }
+
+        .recording-timer {
+            font-variant-numeric: tabular-nums;
+            font-weight: 600;
         }
 
         .drop-overlay {
@@ -770,19 +797,18 @@
                 <div class="input-attachments" id="attachmentsBar"></div>
 
                 <div class="input-wrapper">
-                    <button class="icon-btn" id="imageBtn" title="????" aria-label="????">
+                    <button class="icon-btn" id="imageBtn" title="上传图片" aria-label="上传图片">
                         <i class="bi bi-image"></i>
                     </button>
-                    <button class="icon-btn" id="micBtn" title="????" aria-label="????">
+                    <button class="icon-btn" id="micBtn" title="语音输入" aria-label="语音输入">
                         <i class="bi bi-mic-fill"></i>
                     </button>
-                    <input
-                        type="text"
+                    <textarea
                         class="input-field"
                         id="questionInput"
-                        placeholder="???????..."
-                        autocomplete="off"
-                    />
+                        placeholder="请输入您的问题，支持粘贴/拖拽图片..."
+                        rows="1"
+                    ></textarea>
                     <button class="send-btn" id="sendBtn" onclick="sendMessage()">
                         <i class="bi bi-send-fill"></i>
                         <span>发送</span>
@@ -791,9 +817,16 @@
 
                 <div class="recording-status" id="recordingStatus">
                     <span class="recording-dot"></span>
-                    <span>语音输入</span>
+                    <span>录音中，点击麦克风结束</span>
+                    <span class="recording-timer" id="recordingTimer">00:00</span>
                 </div>
                 <div class="input-error" id="inputError"></div>
+                <div class="input-hint">
+                    <span class="hint-pill"><i class="bi bi-keyboard"></i> Enter 发送</span>
+                    <span class="hint-pill"><i class="bi bi-shift"></i> Shift+Enter 换行</span>
+                    <span class="hint-pill"><i class="bi bi-image"></i> 粘贴/拖拽图片</span>
+                    <span class="hint-pill"><i class="bi bi-mic-fill"></i> 点击麦克风录音</span>
+                </div>
             </div>
             <input type="file" id="imageInput" accept="image/*" multiple hidden />
         </div>
@@ -836,6 +869,7 @@
         const attachmentsBar = document.getElementById('attachmentsBar');
         const dropOverlay = document.getElementById('dropOverlay');
         const recordingStatus = document.getElementById('recordingStatus');
+        const recordingTimer = document.getElementById('recordingTimer');
         const inputError = document.getElementById('inputError');
         const inputSurface = document.querySelector('.input-surface');
 
@@ -850,16 +884,21 @@
         let speechBaseText = '';
         let speechFinalText = '';
         let inputErrorTimer = null;
+        let recordingStartAt = null;
+        let recordingTimerId = null;
 
         // 回车发送
-        questionInput.addEventListener('keypress', function(e) {
+        questionInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 sendMessage();
             }
         });
 
-        questionInput.addEventListener('input', updateSendButtonState);
+        questionInput.addEventListener('input', function() {
+            updateSendButtonState();
+            autoResizeInput();
+        });
         questionInput.addEventListener('paste', handlePaste);
 
         imageBtn.addEventListener('click', function() {
@@ -940,6 +979,45 @@
             return Boolean(attachedImage || attachedAudio);
         }
 
+        function autoResizeInput() {
+            questionInput.style.height = 'auto';
+            const maxHeight = 140;
+            const nextHeight = Math.min(questionInput.scrollHeight, maxHeight);
+            questionInput.style.height = `${nextHeight}px`;
+        }
+
+        function formatDuration(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        }
+
+        function startRecordingTimer() {
+            recordingStartAt = Date.now();
+            if (recordingTimer) {
+                recordingTimer.textContent = '00:00';
+            }
+            if (recordingTimerId) {
+                clearInterval(recordingTimerId);
+            }
+            recordingTimerId = setInterval(function() {
+                if (!recordingStartAt || !recordingTimer) return;
+                const elapsed = Math.floor((Date.now() - recordingStartAt) / 1000);
+                recordingTimer.textContent = formatDuration(elapsed);
+            }, 500);
+        }
+
+        function stopRecordingTimer() {
+            if (recordingTimerId) {
+                clearInterval(recordingTimerId);
+                recordingTimerId = null;
+            }
+            recordingStartAt = null;
+            if (recordingTimer) {
+                recordingTimer.textContent = '00:00';
+            }
+        }
+
         function updateSendButtonState() {
             const hasText = questionInput.value.trim().length > 0;
             sendBtn.disabled = isProcessing || isRecording || (!hasText && !hasAttachments());
@@ -955,11 +1033,11 @@
             const files = Array.from(fileList);
             const imageFiles = files.filter(file => file.type && file.type.startsWith('image/'));
             if (imageFiles.length === 0) {
-                showInputError('???????');
+                showInputError('仅支持图片文件');
                 return;
             }
             if (imageFiles.length > 1) {
-                showInputError('?????????');
+                showInputError('当前仅支持单张图片');
             }
             setImageAttachment(imageFiles[0]);
         }
@@ -977,7 +1055,7 @@
             if (images.length > 0) {
                 event.preventDefault();
                 if (images.length > 1) {
-                    showInputError('?????????');
+                showInputError('当前仅支持单张图片');
                 }
                 setImageAttachment(images[0]);
             }
@@ -997,7 +1075,7 @@
                     <div class="attachment-card">
                         <img class="attachment-thumb" src="${attachedImage.previewUrl}" alt="image preview" />
                         <div class="attachment-label">${escapeHtml(imageName)}</div>
-                        <button class="attachment-remove" data-action="remove-image" aria-label="????">
+                        <button class="attachment-remove" data-action="remove-image" aria-label="移除图片">
                             <i class="bi bi-x"></i>
                         </button>
                     </div>
@@ -1008,8 +1086,8 @@
                 attachmentsBar.insertAdjacentHTML('beforeend', `
                     <div class="attachment-card">
                         <i class="bi bi-soundwave" style="font-size: 1.4rem; color: var(--primary-color);"></i>
-                        <div class="attachment-label">??</div>
-                        <button class="attachment-remove" data-action="remove-audio" aria-label="????">
+                        <div class="attachment-label">语音消息</div>
+                        <button class="attachment-remove" data-action="remove-audio" aria-label="移除语音">
                             <i class="bi bi-x"></i>
                         </button>
                     </div>
@@ -1019,12 +1097,12 @@
 
         function setImageAttachment(file) {
             if (!file || !file.type || !file.type.startsWith('image/')) {
-                showInputError('???????');
+                showInputError('仅支持图片文件');
                 return;
             }
             const maxSize = 10 * 1024 * 1024;
             if (file.size > maxSize) {
-                showInputError('??????? 10MB?');
+                showInputError('图片过大（最大 10MB）');
                 return;
             }
             if (attachedImage && attachedImage.previewUrl) {
@@ -1040,7 +1118,7 @@
 
         function setAudioAttachment(blob, filename) {
             if (!blob || blob.size === 0) {
-                showInputError('????');
+                showInputError('录音为空');
                 return;
             }
             if (attachedAudio && attachedAudio.previewUrl) {
@@ -1127,11 +1205,11 @@
 
         async function startRecording() {
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                showInputError('??????????');
+                showInputError('当前浏览器不支持录音');
                 return;
             }
             if (!window.MediaRecorder) {
-                showInputError('??????????');
+                showInputError('当前浏览器不支持录音');
                 return;
             }
             try {
@@ -1157,10 +1235,11 @@
                 mediaRecorder.start();
                 isRecording = true;
                 updateRecordingUI();
+                startRecordingTimer();
                 updateSendButtonState();
                 startSpeechRecognition();
             } catch (error) {
-                showInputError('?????????????');
+                showInputError('无法访问麦克风，请检查权限');
             }
         }
 
@@ -1171,6 +1250,7 @@
             stopSpeechRecognition();
             isRecording = false;
             updateRecordingUI();
+            stopRecordingTimer();
             updateSendButtonState();
         }
 
@@ -1198,6 +1278,7 @@
                 if (combined) {
                     questionInput.value = combined;
                     updateSendButtonState();
+                    autoResizeInput();
                 }
             };
 
@@ -1407,7 +1488,7 @@
             const hasText = question.length > 0;
             const hasMedia = Boolean(attachedImage || attachedAudio);
             if (isRecording) {
-                showInputError('??????????');
+                showInputError('录音中，请先结束录音');
                 return;
             }
             if ((!hasText && !hasMedia) || isProcessing) return;
@@ -1427,6 +1508,7 @@
 
             // ?????
             questionInput.value = '';
+            autoResizeInput();
 
             const imageToSend = attachedImage;
             const audioToSend = attachedAudio;
@@ -1435,7 +1517,7 @@
             // ??????
             isProcessing = true;
             sendBtn.disabled = true;
-            sendBtn.innerHTML = '<i class="bi bi-hourglass-split"></i><span>???...</span>';
+            sendBtn.innerHTML = '<i class="bi bi-hourglass-split"></i><span>处理中...</span>';
 
             // ??????
             const loadingMessage = addAssistantMessage('', true);
@@ -1466,7 +1548,7 @@
 
                 if (!response.ok) {
                     const error = await response.json();
-                    throw new Error(error.detail || '?????');
+                    throw new Error(error.detail || '服务端错误');
                 }
 
                 const data = await response.json();
@@ -1475,7 +1557,7 @@
                 loadingMessage.remove();
 
                 // ????
-                const answer = data.answer || '?????????????????';
+                const answer = data.answer || '未能生成回答，请检查后端服务配置。';
 
                 // ??????????????
                 const assistantMessage = addAssistantMessage('');
@@ -1492,7 +1574,7 @@
                 // ??????
                 isProcessing = false;
                 sendBtn.disabled = false;
-                sendBtn.innerHTML = '<i class="bi bi-send-fill"></i><span>??</span>';
+                sendBtn.innerHTML = '<i class="bi bi-send-fill"></i><span>发送</span>';
                 updateSendButtonState();
                 questionInput.focus();
             }
@@ -1510,6 +1592,7 @@
         window.addEventListener('load', function() {
             questionInput.focus();
             updateSendButtonState();
+            autoResizeInput();
         });
     </script>
 </body>
