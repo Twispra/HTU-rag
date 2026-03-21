@@ -1,25 +1,32 @@
 # requirements.txt for the project
-# Core dependencies
-sentence-transformers
-numpy
-faiss-cpu
-tqdm
-bs4
-FlagEmbedding
-pydantic
-pydantic-settings
+
+# Core runtime
 fastapi
 uvicorn[standard]
 jinja2
 python-multipart
+pydantic
+pydantic-settings
+numpy==1.26.4
+tqdm
+beautifulsoup4
+faiss-cpu
+sentence-transformers
+FlagEmbedding
 openai
 
-# Multimodal dependencies (optional, only needed if enable_multimodal=True)
+# Multimodal (image/audio)
 transformers>=4.30.0
 torch>=2.0.0
 torchvision>=0.15.0
 openai-whisper
 Pillow>=9.0.0
-paddleocr>=2.6.0
-paddlepaddle>=2.4.0
+opencv-python-headless<4.10
 
+# OCR (optional, only needed if use_ocr=True)
+paddleocr==2.7.3
+paddlepaddle==2.6.2
+
+# Notes:
+# - If you don't need OCR, you can omit paddleocr/paddlepaddle/opencv-python.
+# - If you need GPU for Paddle, replace paddlepaddle with paddlepaddle-gpu.

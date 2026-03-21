@@ -73,8 +73,48 @@ class MultimodalService:
         if _ocr_reader is None and self.use_ocr:
             print("正在加载 PaddleOCR 模型")
             try:
+                # ???? Paddle ???????/???
+                # ?????????? paddleocr/paddle ????
+                os.environ.setdefault("FLAGS_use_pir_api", "0")
+                os.environ.setdefault("FLAGS_enable_pir_api", "0")
+                os.environ.setdefault("FLAGS_use_mkldnn", "0")
+
+                # 若 paddle 已可用，尝试显式关闭 PIR/MKLDNN
+                try:
+                    import paddle
+                    try:
+                        paddle.set_flags({
+                            "FLAGS_use_pir_api": 0,
+                            "FLAGS_enable_pir_api": 0,
+                            "FLAGS_use_mkldnn": 0
+                        })
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
+
                 from paddleocr import PaddleOCR
-                _ocr_reader = PaddleOCR(use_angle_cls=True, lang="ch", show_log=False)
+                import inspect
+
+                ocr_kwargs = {
+                    "use_angle_cls": True,
+                    "lang": "ch"
+                }
+                try:
+                    params = inspect.signature(PaddleOCR.__init__).parameters
+                    if "show_log" in params:
+                        ocr_kwargs["show_log"] = False
+                except Exception:
+                    # signature introspection may fail; keep default behavior
+                    ocr_kwargs["show_log"] = False
+
+                try:
+                    _ocr_reader = PaddleOCR(**ocr_kwargs)
+                except TypeError:
+                    # fallback for older versions without show_log
+                    ocr_kwargs.pop("show_log", None)
+                    _ocr_reader = PaddleOCR(**ocr_kwargs)
+
                 print("OCR 模型加载完成")
             except ImportError:
                 print("警告: paddleocr 未安装，OCR 功能不可用")
@@ -118,7 +158,11 @@ class MultimodalService:
             try:
                 # PaddleOCR 需要 numpy array
                 img_array = np.array(image)
-                result = self.ocr_reader.ocr(img_array, cls=True)
+                try:
+                    result = self.ocr_reader.ocr(img_array, cls=True)
+                except TypeError:
+                    # 兼容不支持 cls 参数的版本
+                    result = self.ocr_reader.ocr(img_array)
                 if result and result[0]:
                     ocr_text = "\n".join([line[1][0] for line in result[0]])
             except Exception as e:

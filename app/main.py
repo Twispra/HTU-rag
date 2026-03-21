@@ -1,5 +1,11 @@
 # -*- coding: utf-8 -*-
 """FastAPI Application Entry Point"""
+import os
+
+# PaddleOCR / Paddle 兼容性设置：需在导入 paddle 相关库之前生效
+os.environ.setdefault("FLAGS_use_pir_api", "0")
+os.environ.setdefault("FLAGS_enable_pir_api", "0")
+os.environ.setdefault("FLAGS_use_mkldnn", "0")
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
