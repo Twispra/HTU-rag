@@ -151,6 +151,7 @@
             background: linear-gradient(135deg, var(--primary-color), var(--primary-light));
             color: white;
             border-bottom-right-radius: 4px;
+            overflow: hidden;
         }
 
         .message-assistant .message-content {
@@ -294,6 +295,7 @@
             padding: 1.5rem;
             position: sticky;
             bottom: 1rem;
+            overflow: hidden;
         }
 
         .input-wrapper {
@@ -347,7 +349,169 @@
             transform: none;
         }
 
-        /* 加载动画 */
+.input-surface {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .icon-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            border: 2px solid #e2e8f0;
+            background: white;
+            color: var(--primary-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .icon-btn:hover {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+            transform: translateY(-2px);
+            box-shadow: var(--card-shadow);
+        }
+
+        .icon-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .icon-btn.recording {
+            background: var(--danger-color);
+            border-color: var(--danger-color);
+            color: white;
+            animation: pulse 1.4s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(245, 54, 92, 0.4);
+            }
+            70% {
+                transform: scale(1.02);
+                box-shadow: 0 0 0 10px rgba(245, 54, 92, 0);
+            }
+            100% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(245, 54, 92, 0);
+            }
+        }
+
+        .input-attachments {
+            display: none;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        .input-attachments.show {
+            display: flex;
+        }
+
+        .attachment-card {
+            position: relative;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            background: #f8fafc;
+            padding: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .attachment-thumb {
+            width: 64px;
+            height: 64px;
+            object-fit: cover;
+            border-radius: 10px;
+            border: 1px solid #e2e8f0;
+            background: white;
+        }
+
+        .attachment-label {
+            font-size: 0.85rem;
+            color: #475569;
+            max-width: 140px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .attachment-remove {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            border: none;
+            background: var(--danger-color);
+            color: white;
+            font-size: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: var(--card-shadow);
+        }
+
+        .recording-status {
+            display: none;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            color: var(--danger-color);
+        }
+
+        .recording-status.show {
+            display: inline-flex;
+        }
+
+        .recording-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--danger-color);
+            box-shadow: 0 0 0 0 rgba(245, 54, 92, 0.4);
+            animation: pulse 1.2s infinite;
+        }
+
+        .input-error {
+            display: none;
+            font-size: 0.85rem;
+            color: var(--danger-color);
+        }
+
+        .drop-overlay {
+            position: absolute;
+            inset: 0;
+            border: 2px dashed var(--primary-color);
+            border-radius: 16px;
+            background: rgba(30, 80, 162, 0.08);
+            color: var(--primary-color);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            gap: 0.5rem;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        .drop-overlay.show {
+            display: flex;
+        }
+
+                /* 加载动画 */
         .loading-message {
             display: flex;
             align-items: center;
@@ -484,6 +648,28 @@
             margin-bottom: 1rem;
         }
 
+        .message-media {
+            margin-top: 0.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .message-text {
+            white-space: pre-wrap;
+        }
+
+        .message-media img {
+            max-width: 240px;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            box-shadow: var(--card-shadow);
+        }
+
+        .message-media audio {
+            width: 240px;
+        }
+
         /* 响应式设计 */
         @media (max-width: 768px) {
             .header-card h1 {
@@ -575,19 +761,42 @@
 
         <!-- 输入区域 -->
         <div class="input-container">
-            <div class="input-wrapper">
-                <input
-                    type="text"
-                    class="input-field"
-                    id="questionInput"
-                    placeholder="请输入您的问题..."
-                    autocomplete="off"
-                />
-                <button class="send-btn" id="sendBtn" onclick="sendMessage()">
-                    <i class="bi bi-send-fill"></i>
-                    <span>发送</span>
-                </button>
+            <div class="input-surface">
+                <div class="drop-overlay" id="dropOverlay">
+                    <i class="bi bi-cloud-arrow-up"></i>
+                    <span>请输入文本</span>
+                </div>
+
+                <div class="input-attachments" id="attachmentsBar"></div>
+
+                <div class="input-wrapper">
+                    <button class="icon-btn" id="imageBtn" title="????" aria-label="????">
+                        <i class="bi bi-image"></i>
+                    </button>
+                    <button class="icon-btn" id="micBtn" title="????" aria-label="????">
+                        <i class="bi bi-mic-fill"></i>
+                    </button>
+                    <input
+                        type="text"
+                        class="input-field"
+                        id="questionInput"
+                        placeholder="???????..."
+                        autocomplete="off"
+                    />
+                    <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+                        <i class="bi bi-send-fill"></i>
+                        <span>发送</span>
+                    </button>
+                </div>
+
+                <div class="recording-status" id="recordingStatus">
+                    <span class="recording-dot"></span>
+                    <span>语音输入</span>
+                </div>
+                <div class="input-error" id="inputError"></div>
             </div>
+            <input type="file" id="imageInput" accept="image/*" multiple hidden />
+        </div>
         </div>
     </div>
 
@@ -621,13 +830,78 @@
         const referencesContent = document.getElementById('referencesContent');
         const scrollBottomBtn = document.getElementById('scrollBottomBtn');
 
+        const imageInput = document.getElementById('imageInput');
+        const imageBtn = document.getElementById('imageBtn');
+        const micBtn = document.getElementById('micBtn');
+        const attachmentsBar = document.getElementById('attachmentsBar');
+        const dropOverlay = document.getElementById('dropOverlay');
+        const recordingStatus = document.getElementById('recordingStatus');
+        const inputError = document.getElementById('inputError');
+        const inputSurface = document.querySelector('.input-surface');
+
         let isProcessing = false;
+
+        let attachedImage = null;
+        let attachedAudio = null;
+        let isRecording = false;
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let speechRecognizer = null;
+        let speechBaseText = '';
+        let speechFinalText = '';
+        let inputErrorTimer = null;
 
         // 回车发送
         questionInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 sendMessage();
+            }
+        });
+
+        questionInput.addEventListener('input', updateSendButtonState);
+        questionInput.addEventListener('paste', handlePaste);
+
+        imageBtn.addEventListener('click', function() {
+            imageInput.click();
+        });
+
+        imageInput.addEventListener('change', function(e) {
+            handleFiles(e.target.files);
+            imageInput.value = '';
+        });
+
+        micBtn.addEventListener('click', function() {
+            toggleRecording();
+        });
+
+        ['dragenter', 'dragover'].forEach(function(eventName) {
+            inputSurface.addEventListener(eventName, function(e) {
+                if (!isFileDrag(e)) return;
+                e.preventDefault();
+                dropOverlay.classList.add('show');
+            });
+        });
+
+        ['dragleave', 'drop'].forEach(function(eventName) {
+            inputSurface.addEventListener(eventName, function(e) {
+                if (!isFileDrag(e)) return;
+                e.preventDefault();
+                if (eventName === 'drop') {
+                    handleFiles(e.dataTransfer.files);
+                }
+                dropOverlay.classList.remove('show');
+            });
+        });
+
+        attachmentsBar.addEventListener('click', function(e) {
+            const actionButton = e.target.closest('button[data-action]');
+            if (!actionButton) return;
+            if (actionButton.dataset.action === 'remove-image') {
+                removeImageAttachment();
+            }
+            if (actionButton.dataset.action === 'remove-audio') {
+                removeAudioAttachment();
             }
         });
 
@@ -650,6 +924,313 @@
             sendMessage();
         }
 
+        function showInputError(message) {
+            if (!inputError) return;
+            inputError.textContent = message;
+            inputError.style.display = 'block';
+            if (inputErrorTimer) {
+                clearTimeout(inputErrorTimer);
+            }
+            inputErrorTimer = setTimeout(function() {
+                inputError.style.display = 'none';
+            }, 4000);
+        }
+
+        function hasAttachments() {
+            return Boolean(attachedImage || attachedAudio);
+        }
+
+        function updateSendButtonState() {
+            const hasText = questionInput.value.trim().length > 0;
+            sendBtn.disabled = isProcessing || isRecording || (!hasText && !hasAttachments());
+        }
+
+        function isFileDrag(event) {
+            if (!event.dataTransfer) return false;
+            return Array.from(event.dataTransfer.types || []).includes('Files');
+        }
+
+        function handleFiles(fileList) {
+            if (!fileList || fileList.length === 0) return;
+            const files = Array.from(fileList);
+            const imageFiles = files.filter(file => file.type && file.type.startsWith('image/'));
+            if (imageFiles.length === 0) {
+                showInputError('???????');
+                return;
+            }
+            if (imageFiles.length > 1) {
+                showInputError('?????????');
+            }
+            setImageAttachment(imageFiles[0]);
+        }
+
+        function handlePaste(event) {
+            const items = event.clipboardData && event.clipboardData.items;
+            if (!items) return;
+            const images = [];
+            for (const item of items) {
+                if (item.type && item.type.startsWith('image/')) {
+                    const file = item.getAsFile();
+                    if (file) images.push(file);
+                }
+            }
+            if (images.length > 0) {
+                event.preventDefault();
+                if (images.length > 1) {
+                    showInputError('?????????');
+                }
+                setImageAttachment(images[0]);
+            }
+        }
+
+        function renderAttachments() {
+            attachmentsBar.innerHTML = '';
+            if (!attachedImage && !attachedAudio) {
+                attachmentsBar.classList.remove('show');
+                return;
+            }
+            attachmentsBar.classList.add('show');
+
+            if (attachedImage) {
+                const imageName = attachedImage.file && attachedImage.file.name ? attachedImage.file.name : 'image';
+                attachmentsBar.insertAdjacentHTML('beforeend', `
+                    <div class="attachment-card">
+                        <img class="attachment-thumb" src="${attachedImage.previewUrl}" alt="image preview" />
+                        <div class="attachment-label">${escapeHtml(imageName)}</div>
+                        <button class="attachment-remove" data-action="remove-image" aria-label="????">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    </div>
+                `);
+            }
+
+            if (attachedAudio) {
+                attachmentsBar.insertAdjacentHTML('beforeend', `
+                    <div class="attachment-card">
+                        <i class="bi bi-soundwave" style="font-size: 1.4rem; color: var(--primary-color);"></i>
+                        <div class="attachment-label">??</div>
+                        <button class="attachment-remove" data-action="remove-audio" aria-label="????">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    </div>
+                `);
+            }
+        }
+
+        function setImageAttachment(file) {
+            if (!file || !file.type || !file.type.startsWith('image/')) {
+                showInputError('???????');
+                return;
+            }
+            const maxSize = 10 * 1024 * 1024;
+            if (file.size > maxSize) {
+                showInputError('??????? 10MB?');
+                return;
+            }
+            if (attachedImage && attachedImage.previewUrl) {
+                URL.revokeObjectURL(attachedImage.previewUrl);
+            }
+            attachedImage = {
+                file: file,
+                previewUrl: URL.createObjectURL(file)
+            };
+            renderAttachments();
+            updateSendButtonState();
+        }
+
+        function setAudioAttachment(blob, filename) {
+            if (!blob || blob.size === 0) {
+                showInputError('????');
+                return;
+            }
+            if (attachedAudio && attachedAudio.previewUrl) {
+                URL.revokeObjectURL(attachedAudio.previewUrl);
+            }
+            attachedAudio = {
+                blob: blob,
+                previewUrl: URL.createObjectURL(blob),
+                filename: filename || 'recording.webm'
+            };
+            renderAttachments();
+            updateSendButtonState();
+        }
+
+        function removeImageAttachment() {
+            if (attachedImage && attachedImage.previewUrl) {
+                URL.revokeObjectURL(attachedImage.previewUrl);
+            }
+            attachedImage = null;
+            renderAttachments();
+            updateSendButtonState();
+        }
+
+        function removeAudioAttachment() {
+            if (attachedAudio && attachedAudio.previewUrl) {
+                URL.revokeObjectURL(attachedAudio.previewUrl);
+            }
+            attachedAudio = null;
+            renderAttachments();
+            updateSendButtonState();
+        }
+
+        function clearAttachments(options) {
+            const keepUrls = options && options.keepUrls;
+            if (!keepUrls) {
+                if (attachedImage && attachedImage.previewUrl) {
+                    URL.revokeObjectURL(attachedImage.previewUrl);
+                }
+                if (attachedAudio && attachedAudio.previewUrl) {
+                    URL.revokeObjectURL(attachedAudio.previewUrl);
+                }
+            }
+            attachedImage = null;
+            attachedAudio = null;
+            renderAttachments();
+            updateSendButtonState();
+        }
+
+        function getAudioExtension(mimeType) {
+            if (!mimeType) return 'webm';
+            if (mimeType.includes('mp4')) return 'mp4';
+            if (mimeType.includes('ogg')) return 'ogg';
+            return 'webm';
+        }
+
+        function getRecorderOptions() {
+            if (!window.MediaRecorder) return {};
+            const candidates = [
+                'audio/webm;codecs=opus',
+                'audio/webm',
+                'audio/ogg;codecs=opus',
+                'audio/mp4'
+            ];
+            for (const type of candidates) {
+                if (MediaRecorder.isTypeSupported(type)) {
+                    return { mimeType: type };
+                }
+            }
+            return {};
+        }
+
+        function updateRecordingUI() {
+            micBtn.classList.toggle('recording', isRecording);
+            recordingStatus.classList.toggle('show', isRecording);
+        }
+
+        async function toggleRecording() {
+            if (isRecording) {
+                stopRecording();
+                return;
+            }
+            await startRecording();
+        }
+
+        async function startRecording() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                showInputError('??????????');
+                return;
+            }
+            if (!window.MediaRecorder) {
+                showInputError('??????????');
+                return;
+            }
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const options = getRecorderOptions();
+                mediaRecorder = new MediaRecorder(stream, options);
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = function(event) {
+                    if (event.data && event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                };
+
+                mediaRecorder.onstop = function() {
+                    const mimeType = mediaRecorder.mimeType || (audioChunks[0] && audioChunks[0].type) || 'audio/webm';
+                    const blob = new Blob(audioChunks, { type: mimeType });
+                    const filename = `recording.${getAudioExtension(mimeType)}`;
+                    setAudioAttachment(blob, filename);
+                    stream.getTracks().forEach(track => track.stop());
+                };
+
+                mediaRecorder.start();
+                isRecording = true;
+                updateRecordingUI();
+                updateSendButtonState();
+                startSpeechRecognition();
+            } catch (error) {
+                showInputError('?????????????');
+            }
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+            stopSpeechRecognition();
+            isRecording = false;
+            updateRecordingUI();
+            updateSendButtonState();
+        }
+
+        function startSpeechRecognition() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) return;
+            speechRecognizer = new SpeechRecognition();
+            speechRecognizer.lang = 'zh-CN';
+            speechRecognizer.interimResults = true;
+            speechRecognizer.continuous = true;
+            speechBaseText = questionInput.value.trim();
+            speechFinalText = '';
+
+            speechRecognizer.onresult = function(event) {
+                let interimText = '';
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const result = event.results[i];
+                    if (result.isFinal) {
+                        speechFinalText += result[0].transcript;
+                    } else {
+                        interimText += result[0].transcript;
+                    }
+                }
+                const combined = (speechBaseText ? speechBaseText + ' ' : '') + (speechFinalText + interimText).trim();
+                if (combined) {
+                    questionInput.value = combined;
+                    updateSendButtonState();
+                }
+            };
+
+            speechRecognizer.onend = function() {
+                if (isRecording) {
+                    try {
+                        speechRecognizer.start();
+                    } catch (e) {
+                        // ignore restart errors
+                    }
+                }
+            };
+
+            try {
+                speechRecognizer.start();
+            } catch (e) {
+                // ignore start errors
+            }
+        }
+
+        function stopSpeechRecognition() {
+            if (!speechRecognizer) return;
+            try {
+                speechRecognizer.onend = null;
+                speechRecognizer.stop();
+            } catch (e) {
+                // ignore stop errors
+            }
+            speechRecognizer = null;
+            speechBaseText = '';
+            speechFinalText = '';
+        }
+
         // 滚动到底部
         function scrollToBottom() {
             chatContainer.scrollTo({
@@ -659,12 +1240,26 @@
         }
 
         // 添加用户消息
-        function addUserMessage(text) {
+        function addUserMessage(text, attachments) {
             const messageDiv = document.createElement('div');
             messageDiv.className = 'message message-user';
+            const safeText = text ? escapeHtml(text).replace(/\n/g, '<br>') : '';
+            let mediaContent = '';
+
+            if (attachments && attachments.imageUrl) {
+                mediaContent += `<img src="${attachments.imageUrl}" alt="user image" />`;
+            }
+            if (attachments && attachments.audioUrl) {
+                mediaContent += `<audio controls src="${attachments.audioUrl}"></audio>`;
+            }
+
+            const mediaBlock = mediaContent ? `<div class="message-media">${mediaContent}</div>` : '';
+            const textBlock = safeText ? `<div class="message-text">${safeText}</div>` : '';
+
             messageDiv.innerHTML = `
                 <div class="message-content">
-                    ${escapeHtml(text)}
+                    ${textBlock}
+                    ${mediaBlock}
                 </div>
                 <div class="message-avatar">
                     <i class="bi bi-person-fill"></i>
@@ -809,49 +1404,84 @@
         // 发送消息
         async function sendMessage() {
             const question = questionInput.value.trim();
-            if (!question || isProcessing) return;
+            const hasText = question.length > 0;
+            const hasMedia = Boolean(attachedImage || attachedAudio);
+            if (isRecording) {
+                showInputError('??????????');
+                return;
+            }
+            if ((!hasText && !hasMedia) || isProcessing) return;
 
-            // 隐藏欢迎消息
+            // ??????
             if (welcomeMessage) {
                 welcomeMessage.style.display = 'none';
             }
 
-            // 添加用户消息
-            addUserMessage(question);
+            const messageAttachments = {
+                imageUrl: attachedImage ? attachedImage.previewUrl : null,
+                audioUrl: attachedAudio ? attachedAudio.previewUrl : null
+            };
 
-            // 清空输入框
+            // ??????
+            addUserMessage(question, messageAttachments);
+
+            // ?????
             questionInput.value = '';
 
-            // 禁用发送按钮
+            const imageToSend = attachedImage;
+            const audioToSend = attachedAudio;
+            clearAttachments({ keepUrls: true });
+
+            // ??????
             isProcessing = true;
             sendBtn.disabled = true;
-            sendBtn.innerHTML = '<i class="bi bi-hourglass-split"></i><span>处理中...</span>';
+            sendBtn.innerHTML = '<i class="bi bi-hourglass-split"></i><span>???...</span>';
 
-            // 显示加载消息
+            // ??????
             const loadingMessage = addAssistantMessage('', true);
 
             try {
-                // 调用API
-                const response = await fetch(`/chat?q=${encodeURIComponent(question)}`);
+                let response;
+
+                if (hasMedia) {
+                    const formData = new FormData();
+                    if (hasText) {
+                        formData.append('text', question);
+                    }
+                    if (imageToSend && imageToSend.file) {
+                        const imageName = imageToSend.file.name || 'image.png';
+                        formData.append('image', imageToSend.file, imageName);
+                    }
+                    if (audioToSend && audioToSend.blob) {
+                        const audioName = audioToSend.filename || 'recording.webm';
+                        formData.append('audio', audioToSend.blob, audioName);
+                    }
+                    response = await fetch('/chat-multimodal', {
+                        method: 'POST',
+                        body: formData
+                    });
+                } else {
+                    response = await fetch(`/chat?q=${encodeURIComponent(question)}`);
+                }
 
                 if (!response.ok) {
                     const error = await response.json();
-                    throw new Error(error.detail || '服务器错误');
+                    throw new Error(error.detail || '?????');
                 }
 
                 const data = await response.json();
 
-                // 移除加载消息
+                // ??????
                 loadingMessage.remove();
 
-                // 获取回答
-                const answer = data.answer || '未能生成回答，请检查后端服务配置。';
+                // ????
+                const answer = data.answer || '?????????????????';
 
-                // 创建助手消息并使用打字机效果
+                // ??????????????
                 const assistantMessage = addAssistantMessage('');
                 await typewriterEffect(assistantMessage, answer);
 
-                // 显示参考资料
+                // ??????
                 showReferences(data.references);
 
             } catch (error) {
@@ -859,10 +1489,11 @@
                 loadingMessage.remove();
                 showError(error.message);
             } finally {
-                // 恢复发送按钮
+                // ??????
                 isProcessing = false;
                 sendBtn.disabled = false;
-                sendBtn.innerHTML = '<i class="bi bi-send-fill"></i><span>发送</span>';
+                sendBtn.innerHTML = '<i class="bi bi-send-fill"></i><span>??</span>';
+                updateSendButtonState();
                 questionInput.focus();
             }
         }
@@ -878,6 +1509,7 @@
         // 页面加载完成，聚焦输入框
         window.addEventListener('load', function() {
             questionInput.focus();
+            updateSendButtonState();
         });
     </script>
 </body>

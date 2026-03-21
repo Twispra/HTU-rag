@@ -44,6 +44,11 @@ def get_multimodal_qa_service():
         raise RuntimeError("Multimodal QA Service not initialized or not enabled")
     return _multimodal_qa_service
 
+def _has_multimodal_service() -> bool:
+    """???????????"""
+    return _multimodal_qa_service is not None
+
+
 
 @router.get(
     "/ask",
@@ -85,37 +90,61 @@ async def chat(q: str = Query(..., description="查询问题", min_length=1)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ============ 多模态接口 ============
+# ============ ????? ============
 
 @router.post(
     "/ask-multimodal",
     response_model=List[MultimodalSearchPreviewItem],
-    summary="多模态检索预览",
-    description="支持文本+图片+音频的多模态检索预览"
+    summary="???????",
+    description="????+??+??????????"
 )
 async def ask_multimodal(
-    text: Optional[str] = Form(None, description="文本查询"),
-    image: Optional[UploadFile] = File(None, description="图片文件"),
-    audio: Optional[UploadFile] = File(None, description="音频文件")
+    text: Optional[str] = Form(None, description="????"),
+    image: Optional[UploadFile] = File(None, description="????"),
+    audio: Optional[UploadFile] = File(None, description="????")
 ):
     """
-    多模态检索预览接口
+    ?????????
 
-    - **text**: 文本查询（可选）
-    - **image**: 图片文件（可选）
-    - **audio**: 音频文件（可选）
-    - **返回**: 相关文档列表（包含媒体信息）
+    - **text**: ????????
+    - **image**: ????????
+    - **audio**: ????????
+    - **??**: ??????????????
     """
     try:
-        multimodal_qa = get_multimodal_qa_service()
+        if not text and image is None and audio is None:
+            raise HTTPException(status_code=400, detail="??????????/??")
 
-        # 读取文件数据
-        image_bytes = await image.read() if image else None
-        audio_bytes = await audio.read() if audio else None
+        # ??????????????
+        if _has_multimodal_service():
+            multimodal_qa = get_multimodal_qa_service()
+            image_bytes = await image.read() if image else None
+            audio_bytes = await audio.read() if audio else None
+            return multimodal_qa.preview_search_multimodal(text, image_bytes, audio_bytes)
 
-        return multimodal_qa.preview_search_multimodal(text, image_bytes, audio_bytes)
-    except RuntimeError as e:
-        raise HTTPException(status_code=501, detail=str(e))
+        # ????????????????????
+        if text:
+            qa = cast(QAService, get_qa_service())
+            results = qa.preview_search(text)
+            return [
+                MultimodalSearchPreviewItem(
+                    title=item.title,
+                    publish_date=item.publish_date,
+                    snippet=item.snippet,
+                    source_url=item.source_url,
+                    media_type=None,
+                    media_url=None,
+                    similarity_score=None
+                )
+                for item in results
+            ]
+
+        raise HTTPException(
+            status_code=400,
+            detail="????????????????/?????????????????"
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -123,32 +152,55 @@ async def ask_multimodal(
 @router.post(
     "/chat-multimodal",
     response_model=MultimodalChatResponse,
-    summary="多模态 RAG 问答",
-    description="支持文本+图片+音频的多模态智能问答"
+    summary="??? RAG ??",
+    description="????+??+??????????"
 )
 async def chat_multimodal(
-    text: Optional[str] = Form(None, description="文本查询"),
-    image: Optional[UploadFile] = File(None, description="图片文件"),
-    audio: Optional[UploadFile] = File(None, description="音频文件")
+    text: Optional[str] = Form(None, description="????"),
+    image: Optional[UploadFile] = File(None, description="????"),
+    audio: Optional[UploadFile] = File(None, description="????")
 ):
     """
-    多模态 RAG 问答接口
+    ??? RAG ????
 
-    - **text**: 文本查询（可选）
-    - **image**: 图片文件（可选）
-    - **audio**: 音频文件（可选）
-    - **返回**: 生成的答案 + 参考文档 + 媒体引用
+    - **text**: ????????
+    - **image**: ????????
+    - **audio**: ????????
+    - **??**: ????? + ???? + ????
     """
     try:
-        multimodal_qa = get_multimodal_qa_service()
+        if not text and image is None and audio is None:
+            raise HTTPException(status_code=400, detail="??????????/??")
 
-        # 读取文件数据
-        image_bytes = await image.read() if image else None
-        audio_bytes = await audio.read() if audio else None
+        # ??????????????
+        if _has_multimodal_service():
+            multimodal_qa = get_multimodal_qa_service()
+            image_bytes = await image.read() if image else None
+            audio_bytes = await audio.read() if audio else None
+            return multimodal_qa.answer_question_multimodal(text, image_bytes, audio_bytes)
 
-        return multimodal_qa.answer_question_multimodal(text, image_bytes, audio_bytes)
-    except RuntimeError as e:
-        raise HTTPException(status_code=501, detail=str(e))
+        # ????????????????????
+        if text:
+            qa = cast(QAService, get_qa_service())
+            result = qa.answer_question(text)
+            note = ""
+            if image is not None or audio is not None:
+                note = "\n\n??????????????????????????/???????"
+            return MultimodalChatResponse(
+                query=result.query,
+                answer=result.answer + note,
+                references=result.references,
+                media_references=[],
+                image_ocr_text=None,
+                audio_transcription=None
+            )
+
+        raise HTTPException(
+            status_code=400,
+            detail="????????????????/?????????????????"
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
