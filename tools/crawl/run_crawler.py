@@ -1,42 +1,96 @@
 # -*- coding: utf-8 -*-
 """
-快速启动爬虫脚本
-用法：
-    python run_crawler.py          # 继续爬取（断点续传）
-    python run_crawler.py --force  # 强制重新爬取
+Crawler launcher.
+
+Examples:
+    python tools/crawl/run_crawler.py
+    python tools/crawl/run_crawler.py --force
+    python tools/crawl/run_crawler.py --max-pages 5 --delay 0.5
 """
-import sys
+import argparse
 import subprocess
+import sys
+from pathlib import Path
 
-# 配置参数
-START_URL = "https://www.htu.edu.cn/teaching/3251/list.htm"
-OUTPUT_DIR = "../../dataset"
-MAX_PAGES = 100  # 最多爬取100页
-DELAY = 1.0      # 请求间隔1秒
 
-# 构建命令
-cmd = [
-    "python", "crawl.py",
-    "--start", START_URL,
-    "--out", OUTPUT_DIR,
-    "--max-pages", str(MAX_PAGES),
-    "--delay", str(DELAY)
-]
+SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = SCRIPT_DIR.parents[1]
+CRAWL_SCRIPT = SCRIPT_DIR / "crawl.py"
 
-# 检查是否有--force参数
-if "--force" in sys.argv or "-f" in sys.argv:
-    cmd.append("--force")
-    print("🔄 强制模式：将清除已有状态，重新爬取所有内容")
-else:
-    print("⏩ 继续模式：将从上次中断处继续爬取")
+DEFAULT_START_URL = "https://www.htu.edu.cn/teaching/3251/list.htm"
+DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "dataset"
+DEFAULT_MAX_PAGES = 100
+DEFAULT_DELAY = 1.0
+DEFAULT_STOP_AFTER_KNOWN_PAGES = 3
 
-print(f"\n📡 开始爬取：{START_URL}")
-print(f"📁 输出目录：{OUTPUT_DIR}")
-print(f"📄 最多爬取：{MAX_PAGES} 页")
-print(f"⏱️  请求间隔：{DELAY} 秒")
-print(f"\n执行命令：{' '.join(cmd)}\n")
-print("="*60)
 
-# 运行爬虫
-subprocess.run(cmd)
+def build_command(args: argparse.Namespace):
+    command = [
+        sys.executable,
+        str(CRAWL_SCRIPT),
+        "--start",
+        args.start,
+        "--out",
+        str(Path(args.out).expanduser().resolve()),
+        "--max-pages",
+        str(args.max_pages),
+        "--delay",
+        str(args.delay),
+        "--stop-after-known-pages",
+        str(args.stop_after_known_pages),
+    ]
 
+    if args.force:
+        command.append("--force")
+    if args.refresh_known:
+        command.append("--refresh-known")
+
+    return command
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Run HTU crawler with stable paths.")
+    parser.add_argument("--start", default=DEFAULT_START_URL, help="列表起始 URL")
+    parser.add_argument(
+        "--out",
+        default=str(DEFAULT_OUTPUT_DIR),
+        help="dataset 输出目录",
+    )
+    parser.add_argument("--max-pages", type=int, default=DEFAULT_MAX_PAGES, help="最多抓取列表页数")
+    parser.add_argument("--delay", type=float, default=DEFAULT_DELAY, help="请求间隔秒数")
+    parser.add_argument("--force", action="store_true", help="强制重新抓取")
+    parser.add_argument(
+        "--refresh-known",
+        action="store_true",
+        help="刷新已记录文章，适合同 URL 内容有更新时使用",
+    )
+    parser.add_argument(
+        "--stop-after-known-pages",
+        type=int,
+        default=DEFAULT_STOP_AFTER_KNOWN_PAGES,
+        help="增量模式下连续多少个列表页无新增后停止；0 表示不提前停止",
+    )
+    args = parser.parse_args()
+
+    command = build_command(args)
+
+    print(f"\n开始爬取：{args.start}")
+    print(f"输出目录：{Path(args.out).expanduser().resolve()}")
+    print(f"最多列表页：{args.max_pages}")
+    print(f"请求间隔：{args.delay} 秒")
+    print(f"强制模式：{'是' if args.force else '否'}")
+    print(f"刷新已知文章：{'是' if args.refresh_known else '否'}")
+    print(f"无新增提前停止页数：{args.stop_after_known_pages}")
+    print(f"\n执行命令：{' '.join(command)}")
+    print("=" * 60)
+
+    try:
+        subprocess.run(command, check=True, cwd=str(PROJECT_ROOT))
+    except subprocess.CalledProcessError as exc:
+        print(f"\n执行失败，退出码: {exc.returncode}")
+        print("请确认当前 Python 环境已安装项目依赖，并使用项目对应的虚拟环境运行。")
+        sys.exit(exc.returncode)
+
+
+if __name__ == "__main__":
+    main()
