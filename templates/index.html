@@ -880,9 +880,12 @@
         let isRecording = false;
         let mediaRecorder = null;
         let audioChunks = [];
-        let speechRecognizer = null;
-        let speechBaseText = '';
-        let speechFinalText = '';
+        let recordingStream = null;
+        let audioContext = null;
+        let audioProcessor = null;
+        let audioSource = null;
+        let pcmChunks = [];
+        let pcmSampleRate = 44100;
         let inputErrorTimer = null;
         let recordingStartAt = null;
         let recordingTimerId = null;
@@ -1167,15 +1170,21 @@
             updateSendButtonState();
         }
 
+        function isEdgeBrowser() {
+            return navigator.userAgent.includes('Edg/');
+        }
+
         function getAudioExtension(mimeType) {
             if (!mimeType) return 'webm';
             if (mimeType.includes('mp4')) return 'mp4';
             if (mimeType.includes('ogg')) return 'ogg';
+            if (mimeType.includes('wav')) return 'wav';
             return 'webm';
         }
 
         function getRecorderOptions() {
             if (!window.MediaRecorder) return {};
+            if (navigator.userAgent.includes('Edg/')) return {};
             const candidates = [
                 'audio/webm;codecs=opus',
                 'audio/webm',
@@ -1195,6 +1204,56 @@
             recordingStatus.classList.toggle('show', isRecording);
         }
 
+        function encodeWav(samples, sampleRate) {
+            const bytesPerSample = 2;
+            const headerBytes = 44;
+            const dataBytes = samples.length * bytesPerSample;
+            const buffer = new ArrayBuffer(headerBytes + dataBytes);
+            const view = new DataView(buffer);
+
+            function writeString(offset, value) {
+                for (let i = 0; i < value.length; i++) {
+                    view.setUint8(offset + i, value.charCodeAt(i));
+                }
+            }
+
+            writeString(0, 'RIFF');
+            view.setUint32(4, 36 + dataBytes, true);
+            writeString(8, 'WAVE');
+            writeString(12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, 1, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * bytesPerSample, true);
+            view.setUint16(32, bytesPerSample, true);
+            view.setUint16(34, 8 * bytesPerSample, true);
+            writeString(36, 'data');
+            view.setUint32(40, dataBytes, true);
+
+            let offset = headerBytes;
+            for (let i = 0; i < samples.length; i++, offset += 2) {
+                const sample = Math.max(-1, Math.min(1, samples[i]));
+                view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+            }
+
+            return new Blob([buffer], { type: 'audio/wav' });
+        }
+
+        function buildPcmBlob() {
+            const totalLength = pcmChunks.reduce((sum, chunk) => sum + chunk.length, 0);
+            if (totalLength === 0) {
+                return new Blob([], { type: 'audio/wav' });
+            }
+            const samples = new Float32Array(totalLength);
+            let offset = 0;
+            for (const chunk of pcmChunks) {
+                samples.set(chunk, offset);
+                offset += chunk.length;
+            }
+            return encodeWav(samples, pcmSampleRate);
+        }
+
         async function toggleRecording() {
             if (isRecording) {
                 stopRecording();
@@ -1208,12 +1267,31 @@
                 showInputError('当前浏览器不支持录音');
                 return;
             }
-            if (!window.MediaRecorder) {
+            if (!window.MediaRecorder && !isEdgeBrowser()) {
                 showInputError('当前浏览器不支持录音');
                 return;
             }
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                recordingStream = stream;
+                if (isEdgeBrowser()) {
+                    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                    audioContext = new AudioContextClass();
+                    if (audioContext.state === 'suspended') {
+                        await audioContext.resume();
+                    }
+                    pcmSampleRate = audioContext.sampleRate;
+                    pcmChunks = [];
+                    audioSource = audioContext.createMediaStreamSource(stream);
+                    audioProcessor = audioContext.createScriptProcessor(4096, 1, 1);
+                    audioProcessor.onaudioprocess = function(event) {
+                        pcmChunks.push(new Float32Array(event.inputBuffer.getChannelData(0)));
+                    };
+                    audioSource.connect(audioProcessor);
+                    audioProcessor.connect(audioContext.destination);
+                    mediaRecorder = null;
+                    audioChunks = [];
+                } else {
                 const options = getRecorderOptions();
                 mediaRecorder = new MediaRecorder(stream, options);
                 audioChunks = [];
@@ -1230,14 +1308,16 @@
                     const filename = `recording.${getAudioExtension(mimeType)}`;
                     setAudioAttachment(blob, filename);
                     stream.getTracks().forEach(track => track.stop());
+                    recordingStream = null;
+                    mediaRecorder = null;
                 };
 
                 mediaRecorder.start();
+                }
                 isRecording = true;
                 updateRecordingUI();
                 startRecordingTimer();
                 updateSendButtonState();
-                startSpeechRecognition();
             } catch (error) {
                 showInputError('无法访问麦克风，请检查权限');
             }
@@ -1246,8 +1326,28 @@
         function stopRecording() {
             if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                 mediaRecorder.stop();
+            } else if (audioProcessor || audioContext) {
+                if (audioProcessor) {
+                    audioProcessor.disconnect();
+                    audioProcessor.onaudioprocess = null;
+                }
+                if (audioSource) {
+                    audioSource.disconnect();
+                }
+                const blob = buildPcmBlob();
+                setAudioAttachment(blob, 'recording.wav');
+                if (recordingStream) {
+                    recordingStream.getTracks().forEach(track => track.stop());
+                }
+                if (audioContext) {
+                    audioContext.close();
+                }
+                audioProcessor = null;
+                audioSource = null;
+                audioContext = null;
+                recordingStream = null;
+                pcmChunks = [];
             }
-            stopSpeechRecognition();
             isRecording = false;
             updateRecordingUI();
             stopRecordingTimer();
@@ -1255,6 +1355,7 @@
         }
 
         function startSpeechRecognition() {
+            return;
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (!SpeechRecognition) return;
             speechRecognizer = new SpeechRecognition();
@@ -1300,6 +1401,7 @@
         }
 
         function stopSpeechRecognition() {
+            return;
             if (!speechRecognizer) return;
             try {
                 speechRecognizer.onend = null;

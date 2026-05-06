@@ -2,7 +2,7 @@
 """Multimodal Retrieval Service (支持图片和音频检索)"""
 import faiss
 import numpy as np
-from typing import List, Dict, Optional, Tuple
+from typing import Any, List, Dict, Optional, Tuple
 import json
 from pathlib import Path
 from app.services.retrieval import RetrievalService
@@ -102,7 +102,7 @@ class MultimodalRetrievalService:
     def retrieve_multimodal(self,
                            text: Optional[str] = None,
                            image: Optional[bytes] = None,
-                           audio: Optional[bytes] = None,
+                           audio: Optional[Any] = None,
                            preprocessed: Optional[Dict] = None) -> List[Dict]:
         """
         Multimodal retrieval (text + image + audio fusion).

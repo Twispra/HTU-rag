@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Multimodal Question Answering Service"""
 import re
-from typing import List, Optional
+from typing import Any, List, Optional
 from app.services.multimodal_retrieval import MultimodalRetrievalService
 from app.models.llm import ChatLLM
 from app.models.schemas import (
@@ -28,7 +28,7 @@ class MultimodalQAService:
     def answer_question_multimodal(self,
                                    text: Optional[str] = None,
                                    image: Optional[bytes] = None,
-                                   audio: Optional[bytes] = None) -> MultimodalChatResponse:
+                                   audio: Optional[Any] = None) -> MultimodalChatResponse:
         """Multimodal QA (RAG generation)."""
         try:
             # Preprocess once to avoid duplicate work
@@ -117,7 +117,7 @@ class MultimodalQAService:
     def preview_search_multimodal(self,
                                   text: Optional[str] = None,
                                   image: Optional[bytes] = None,
-                                  audio: Optional[bytes] = None) -> List[MultimodalSearchPreviewItem]:
+                                  audio: Optional[Any] = None) -> List[MultimodalSearchPreviewItem]:
         """Multimodal preview search (no LLM)."""
         multimodal_result = self.retrieval.multimodal.process_multimodal_query(text, image, audio)
         combined_query = multimodal_result.get("combined_text", "")

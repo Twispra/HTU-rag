@@ -3,7 +3,7 @@
 import os
 import tempfile
 from pathlib import Path
-from typing import Optional, Union, Tuple, Dict
+from typing import Any, Optional, Union, Tuple, Dict
 import numpy as np
 from PIL import Image
 import io
@@ -13,6 +13,19 @@ _clip_model = None
 _clip_processor = None
 _whisper_model = None
 _ocr_reader = None
+
+_AUDIO_SUFFIX_BY_MIME = {
+    "audio/webm": ".webm",
+    "audio/ogg": ".ogg",
+    "audio/opus": ".opus",
+    "audio/mp4": ".mp4",
+    "audio/mpeg": ".mp3",
+    "audio/mp3": ".mp3",
+    "audio/wav": ".wav",
+    "audio/wave": ".wav",
+    "audio/x-wav": ".wav",
+}
+_ALLOWED_AUDIO_SUFFIXES = {".webm", ".ogg", ".opus", ".mp4", ".m4a", ".mp3", ".wav", ".flac", ".aac"}
 
 
 class MultimodalService:
@@ -187,18 +200,49 @@ class MultimodalService:
         if model is None:
             raise RuntimeError("Whisper 模型未安装或加载失败")
 
-        result = model.transcribe(audio_path, language="zh")
-        transcribed_text = result["text"]
+        import whisper
+        audio = whisper.load_audio(audio_path)
+        duration = len(audio) / 16000 if len(audio) else 0
+        peak = float(np.max(np.abs(audio))) if len(audio) else 0.0
+        rms = float(np.sqrt(np.mean(np.square(audio)))) if len(audio) else 0.0
+        print(f"[ASR] decoded audio: duration={duration:.2f}s, peak={peak:.6f}, rms={rms:.6f}")
+
+        if len(audio):
+            audio = audio - float(np.mean(audio))
+            peak = float(np.max(np.abs(audio)))
+            if peak > 1e-5:
+                audio = np.clip(audio / peak * 0.8, -1.0, 1.0).astype(np.float32)
+                rms = float(np.sqrt(np.mean(np.square(audio))))
+                print(f"[ASR] normalized audio: peak=0.800000, rms={rms:.6f}")
+
+        result = model.transcribe(
+            audio,
+            language="zh",
+            task="transcribe",
+            fp16=False,
+            condition_on_previous_text=False,
+            no_speech_threshold=1.0,
+            initial_prompt="以下是普通话中文问句。",
+        )
+        transcribed_text = (result.get("text") or "").strip()
+        if not transcribed_text:
+            fallback_result = model.transcribe(
+                audio,
+                task="transcribe",
+                fp16=False,
+                condition_on_previous_text=False,
+                no_speech_threshold=1.0,
+            )
+            transcribed_text = (fallback_result.get("text") or "").strip()
+        print(f"[ASR] transcription length={len(transcribed_text)}, text={transcribed_text!r}")
 
         # 可选：提取音频特征向量（使用 Whisper encoder）
         # 注意：这里简化处理，实际可以用更专业的音频 embedding 模型
         audio_embedding = None
         try:
             import torch
-            import whisper
-            audio = whisper.load_audio(audio_path)
-            audio = whisper.pad_or_trim(audio)
-            mel = whisper.log_mel_spectrogram(audio).to(model.device)
+            embedding_audio = whisper.pad_or_trim(audio)
+            mel = whisper.log_mel_spectrogram(embedding_audio).to(model.device)
 
             with torch.no_grad():
                 audio_features = model.embed_audio(mel.unsqueeze(0))
@@ -207,6 +251,19 @@ class MultimodalService:
             print(f"音频特征提取失败: {e}")
 
         return transcribed_text, audio_embedding
+
+    def _audio_suffix_from_upload(self, audio_info: Dict[str, Any]) -> str:
+        """Choose a temporary file suffix that matches the uploaded audio format."""
+        content_type = (audio_info.get("content_type") or "").split(";", 1)[0].lower()
+        if content_type in _AUDIO_SUFFIX_BY_MIME:
+            return _AUDIO_SUFFIX_BY_MIME[content_type]
+
+        filename = audio_info.get("filename") or ""
+        suffix = Path(filename).suffix.lower()
+        if suffix in _ALLOWED_AUDIO_SUFFIXES:
+            return suffix
+
+        return ".webm"
 
     def encode_text_for_image_search(self, text: str) -> np.ndarray:
         """
@@ -253,7 +310,7 @@ class MultimodalService:
     def process_multimodal_query(self,
                                   text: Optional[str] = None,
                                   image: Optional[Union[str, bytes]] = None,
-                                  audio: Optional[Union[str, bytes]] = None) -> Dict[str, any]:
+                                  audio: Optional[Union[str, bytes, Dict[str, Any]]] = None) -> Dict[str, Any]:
         """
         处理多模态查询（文本 + 图片 + 音频）
 
@@ -297,14 +354,25 @@ class MultimodalService:
         if audio:
             try:
                 temp_path = None
+                audio_payload = audio
+                audio_suffix = ".wav"
+                if isinstance(audio, dict):
+                    audio_payload = audio.get("bytes")
+                    audio_suffix = self._audio_suffix_from_upload(audio)
+                if not audio_payload:
+                    raise ValueError("Uploaded audio is empty")
+                print(
+                    "[ASR] processing audio: "
+                    f"suffix={audio_suffix}, bytes={len(audio_payload) if isinstance(audio_payload, bytes) else 'path'}"
+                )
                 try:
-                    if isinstance(audio, bytes):
-                        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
-                            tmp.write(audio)
+                    if isinstance(audio_payload, bytes):
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=audio_suffix) as tmp:
+                            tmp.write(audio_payload)
                             temp_path = tmp.name
                         audio_text, audio_emb = self.extract_audio_features(temp_path)
                     else:
-                        audio_text, audio_emb = self.extract_audio_features(audio)
+                        audio_text, audio_emb = self.extract_audio_features(audio_payload)
                 finally:
                     if temp_path:
                         try:

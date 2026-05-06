@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """API Routes"""
 from fastapi import APIRouter, Query, HTTPException, File, UploadFile, Form
-from typing import List, cast, Optional
+from typing import Any, Dict, List, cast, Optional
 
 from app.models.schemas import (
     ChatResponse, SearchPreviewItem,
@@ -47,6 +47,22 @@ def get_multimodal_qa_service():
 def _has_multimodal_service() -> bool:
     """???????????"""
     return _multimodal_qa_service is not None
+
+
+async def _read_audio_upload(audio: Optional[UploadFile]) -> Optional[Dict[str, Any]]:
+    """Read an uploaded audio file while preserving format hints for Whisper."""
+    if audio is None:
+        return None
+    audio_bytes = await audio.read()
+    print(
+        "[ASR] upload received: "
+        f"filename={audio.filename!r}, content_type={audio.content_type!r}, bytes={len(audio_bytes)}"
+    )
+    return {
+        "bytes": audio_bytes,
+        "filename": audio.filename or "",
+        "content_type": audio.content_type or "",
+    }
 
 
 
@@ -119,8 +135,8 @@ async def ask_multimodal(
         if _has_multimodal_service():
             multimodal_qa = get_multimodal_qa_service()
             image_bytes = await image.read() if image else None
-            audio_bytes = await audio.read() if audio else None
-            return multimodal_qa.preview_search_multimodal(text, image_bytes, audio_bytes)
+            audio_payload = await _read_audio_upload(audio)
+            return multimodal_qa.preview_search_multimodal(text, image_bytes, audio_payload)
 
         # ????????????????????
         if text:
@@ -176,8 +192,8 @@ async def chat_multimodal(
         if _has_multimodal_service():
             multimodal_qa = get_multimodal_qa_service()
             image_bytes = await image.read() if image else None
-            audio_bytes = await audio.read() if audio else None
-            return multimodal_qa.answer_question_multimodal(text, image_bytes, audio_bytes)
+            audio_payload = await _read_audio_upload(audio)
+            return multimodal_qa.answer_question_multimodal(text, image_bytes, audio_payload)
 
         # ????????????????????
         if text:
